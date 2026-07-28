@@ -1,0 +1,1346 @@
+[
+  {
+    "team": "Over 35s",
+    "opponent": "Port Sunlight",
+    "date": "2025-08-30",
+    "venue": "Chesterfield HS",
+    "result": "3-1",
+    "scorers": [
+      "Hay (2)",
+      "James"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "FC",
+    "notes": "[CF]"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Woolton Vets",
+    "date": "2025-09-06",
+    "venue": "Simpson Ground",
+    "result": "0-10",
+    "scorers": [
+      "Bergqvist (4)",
+      "Parkinson (3)",
+      "Millington (2)",
+      "Hay"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "35+"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Ashton",
+    "date": "2025-09-06",
+    "venue": "Sandy Lane",
+    "result": "5-2",
+    "scorers": [
+      "Martin",
+      "Curran (2)",
+      "Shildhauer",
+      "OG"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "FCM"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Old Xaverians A Team",
+    "date": "2025-09-06",
+    "venue": "Halewood",
+    "result": "2-2",
+    "scorers": [
+      "Cummins",
+      "Ponzini"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "St Mary's",
+    "date": "2025-09-13",
+    "venue": "Marine FC",
+    "result": "2-3",
+    "scorers": [
+      "Curran(2)",
+      "McNally"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "45+"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "River FC",
+    "date": "2025-09-13",
+    "venue": "Jeffery Humble (C Cup)",
+    "result": "1-6",
+    "scorers": [
+      "Stott",
+      "Hitchman",
+      "Roden",
+      "Lambert",
+      "Cummins (2)"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Crewe FC Vets",
+    "date": "2025-09-20",
+    "venue": "Crewe",
+    "result": "3-7",
+    "scorers": [
+      "Bergqvist (2)",
+      "James",
+      "Bishop (2)",
+      "Parkinson",
+      "Hay"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "CWFL"
+  },
+  {
+    "team": "Over 50s",
+    "opponent": "Hartford",
+    "date": "2025-09-20",
+    "venue": "Sandy Lane",
+    "result": "5-3",
+    "scorers": [
+      "Smith (4)",
+      "Jordan"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "FCL"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Chester Nomads",
+    "date": "2025-09-27",
+    "venue": "Chesterfield HS",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null,
+    "notes": "Nomads Availability [CF]"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "West Kirby",
+    "date": "2025-09-27",
+    "venue": "Halewood",
+    "result": "3-3",
+    "scorers": [
+      "Shildhauer",
+      "Auton",
+      "Parkinson"
+    ],
+    "homeAway": "Away",
+    "outcome": "Draw",
+    "type": "45+"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Kingfisher FC",
+    "date": "2025-09-27",
+    "venue": "Kirby",
+    "result": "2-4",
+    "scorers": [
+      "Clifton (2)",
+      "Bradley",
+      "Roden"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Wirral Masters",
+    "date": "2025-10-04",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null
+  },
+  {
+    "team": "Over 50s",
+    "opponent": "SMA",
+    "date": "2025-10-04",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null
+  },
+  {
+    "team": "Open Age",
+    "opponent": "MSB Wollton",
+    "date": "2025-10-04",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Winsford Town FC Vets",
+    "date": "2025-10-11",
+    "venue": "Chesterfield HS",
+    "result": "6-2",
+    "scorers": [
+      "C McDougall (2)",
+      "Reid",
+      "James",
+      "Hay",
+      "Bergqvist"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "CWFL",
+    "notes": "[CF]"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Hartford",
+    "date": "2025-10-11",
+    "venue": "Hartford",
+    "result": "1-4",
+    "scorers": [
+      "Smith (2)",
+      "Kirby",
+      "Curran"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "FCM"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Mersey Royal FC",
+    "date": "2025-10-17",
+    "venue": "Birkenhead CH42 8NU",
+    "result": "3-2",
+    "scorers": [
+      "Bergqvist",
+      "Bishop"
+    ],
+    "homeAway": "Away",
+    "outcome": "Loss",
+    "type": "CWFL"
+  },
+  {
+    "team": "Over 50s",
+    "opponent": "Eastham & Liobians",
+    "date": "2025-10-18",
+    "venue": "Sandy Lane",
+    "result": "4-0",
+    "scorers": [
+      "OG",
+      "Smith (2)",
+      "Quirk"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "FCL"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "River FC",
+    "date": "2025-10-18",
+    "venue": "Halewood",
+    "result": "1-1",
+    "scorers": [
+      "Hitchman"
+    ],
+    "homeAway": "Home",
+    "outcome": "Draw",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Ormskirk Parrots",
+    "date": "2025-10-24",
+    "venue": "Burscough",
+    "result": "2-6",
+    "scorers": [
+      "Bergqvist (3)",
+      "Hay",
+      "Parkinson",
+      "Kenny"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "35+",
+    "notes": "[CF]"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Convocation",
+    "date": "2025-10-25",
+    "venue": "Sandy Lane",
+    "result": "2-0",
+    "scorers": [
+      "Smith",
+      "McNulty"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "FCM"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Barry's Lodge FC",
+    "date": "2025-10-25",
+    "venue": "Away",
+    "result": "3-2",
+    "scorers": [
+      "Hitchman",
+      "Bradley"
+    ],
+    "homeAway": "Away",
+    "outcome": "Loss",
+    "type": "OA"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Wirral Vets",
+    "date": "2025-11-01",
+    "venue": "Bromborough",
+    "result": "4-3",
+    "scorers": [
+      "N McQueen",
+      "McNulty (2)"
+    ],
+    "homeAway": "Away",
+    "outcome": "Loss",
+    "type": "45+"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Liverpool Ramblers",
+    "date": "2025-11-08",
+    "venue": "Sandy Lane",
+    "result": "6-0",
+    "scorers": [
+      "J Shannon",
+      "McKeating",
+      "Shildhauer",
+      "Martin",
+      "Highton"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "FCM"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Bruche Athletic",
+    "date": "2025-11-08",
+    "venue": "The Tetleys Club (C Cup)",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Unknown",
+    "type": null
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Higher Beb Kelma Vets",
+    "date": "2025-11-15",
+    "venue": "Bidston",
+    "result": "2-5",
+    "scorers": [
+      "Parkinson (3)",
+      "Bishop",
+      "N McQueen"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "CWFL"
+  },
+  {
+    "team": "Over 50s",
+    "opponent": "Alsop",
+    "date": "2025-11-15",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Saltbox",
+    "date": "2025-11-15",
+    "venue": "Halewood",
+    "result": "4-3",
+    "scorers": [
+      "Mooney",
+      "Hitchman (2)",
+      "Roden"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "The NAC",
+    "date": "2025-11-22",
+    "venue": "Chesterfield HS",
+    "result": "2-5",
+    "scorers": [
+      "D Stafford",
+      "Millington"
+    ],
+    "homeAway": "Home",
+    "outcome": "Loss",
+    "type": "FC",
+    "notes": "[CF]"
+  },
+  {
+    "team": "Over 50s",
+    "opponent": "Alsop",
+    "date": "2025-11-22",
+    "venue": "Sandy Lane",
+    "result": "1-2",
+    "scorers": [
+      "Kirby"
+    ],
+    "homeAway": "Home",
+    "outcome": "Loss",
+    "type": "FCL"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Capenhurst Villa FC Vets",
+    "date": "2025-11-29",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null,
+    "notes": "CVFC Away in cup"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Forefield FC",
+    "date": "2025-11-29",
+    "venue": "Chesterfield HS",
+    "result": "5-4",
+    "scorers": [
+      "McKendrick",
+      "Stafford (2)",
+      "McNally"
+    ],
+    "homeAway": "Away",
+    "outcome": "Loss",
+    "type": "FCM"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Mossley Hill",
+    "date": "2025-11-29",
+    "venue": "Halewood",
+    "result": "2-4",
+    "scorers": [
+      "Roden",
+      "Hitchman"
+    ],
+    "homeAway": "Home",
+    "outcome": "Loss",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Mersey Royal FC",
+    "date": "2025-12-06",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null,
+    "notes": "[CF]"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Sacre Coure",
+    "date": "2025-12-06",
+    "venue": "Kirby Leisure (Cup)",
+    "result": null,
+    "scorers": [],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA",
+    "notes": "Cup - Away Win"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Hooton Vets FC",
+    "date": "2025-12-12",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null,
+    "notes": "Hooton have left league"
+  },
+  {
+    "team": "Over 50s",
+    "opponent": "Ashton",
+    "date": "2025-12-13",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Mersey Harps",
+    "date": "2025-12-13",
+    "venue": "Tiber Football",
+    "result": "1-3",
+    "scorers": [
+      "Cummins (2)",
+      "Grimsditch"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "BRNESC",
+    "date": "2025-12-20",
+    "venue": "Halewood",
+    "result": "1-4",
+    "scorers": [
+      "Walkington"
+    ],
+    "homeAway": "Home",
+    "outcome": "Loss",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "OA Inter club",
+    "date": "2025-12-27",
+    "venue": "Sandy Lane",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Unknown",
+    "type": null
+  },
+  {
+    "team": "Over 50s",
+    "opponent": "Alsop",
+    "date": "2025-12-27",
+    "venue": "Alder",
+    "result": "3-9",
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Unknown",
+    "type": null,
+    "notes": "Charity game"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "+35 Inter Club",
+    "date": "2025-12-27",
+    "venue": "Sandy Lane",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Unknown",
+    "type": null
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Chester Nomads",
+    "date": "2026-01-03",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null,
+    "notes": "Weather"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Crewe FC Vets",
+    "date": "2026-01-10",
+    "venue": "Chesterfield HS",
+    "result": "3-1",
+    "scorers": [
+      "Hay (2)",
+      "Price"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "CWFL",
+    "notes": "[CF]"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Liobians",
+    "date": "2026-01-10",
+    "venue": "Oval",
+    "result": "5-6",
+    "scorers": [
+      "Quirk",
+      "Smith",
+      "Martin",
+      "Auton",
+      "OG"
+    ],
+    "homeAway": "Away",
+    "outcome": "Loss",
+    "type": "45+"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Halton Farnworth",
+    "date": "2026-01-10",
+    "venue": "Wilmere Lane (C Cup)",
+    "result": "1-3",
+    "scorers": [
+      "Roden (3)"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "SFX Vets",
+    "date": "2026-01-17",
+    "venue": "Away",
+    "result": "1-9",
+    "scorers": [
+      "Price (2)",
+      "Hay (2)",
+      "Bergqvist (2)",
+      "Millington",
+      "McQueen",
+      "D Stafford"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "FC"
+  },
+  {
+    "team": "Over 50s",
+    "opponent": "Liverpool Ramblers",
+    "date": "2026-01-17",
+    "venue": "Crosby",
+    "result": "1-2",
+    "scorers": [
+      "Scott (2)"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "FCL"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Barry's Lodge FC",
+    "date": "2026-01-17",
+    "venue": "Halewood",
+    "result": "2-3",
+    "scorers": [
+      "Cummins",
+      "Roden"
+    ],
+    "homeAway": "Home",
+    "outcome": "Loss",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Frodsham Park JFC",
+    "date": "2026-01-24",
+    "venue": "Helsby High WA6 0HY",
+    "result": "1-8",
+    "scorers": [
+      "Hay (3)",
+      "Bergqvist (2)",
+      "Reid (2)",
+      "McQueen [League Cup]"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "CWFL"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Wirral Vets",
+    "date": "2026-01-24",
+    "venue": "Sandy Lane",
+    "result": "3-4",
+    "scorers": [
+      "Shildhauer",
+      "Auton",
+      "Byron"
+    ],
+    "homeAway": "Home",
+    "outcome": "Loss",
+    "type": "45+"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Haroldeans",
+    "date": "2026-01-24",
+    "venue": "Heron Eccles (Cup)",
+    "result": "3-2",
+    "scorers": [
+      "Hitchman",
+      "Cummins"
+    ],
+    "homeAway": "Away",
+    "outcome": "Loss",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Convocation",
+    "date": "2026-01-31",
+    "venue": "Uni",
+    "result": "1-13",
+    "scorers": [
+      "Bergqvist (5)",
+      "Bishop (2)",
+      "Millington (2)",
+      "Hay",
+      "Reid (3)"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "FC"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Queens Park",
+    "date": "2026-01-31",
+    "venue": "Shaftes Memorial",
+    "result": "5-2",
+    "scorers": [
+      "Smith",
+      "Curran"
+    ],
+    "homeAway": "Away",
+    "outcome": "Loss",
+    "type": "45+"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "River FC",
+    "date": "2026-01-31",
+    "venue": "Jeffery Humble",
+    "result": "0-2",
+    "scorers": [
+      "Cummins",
+      "Higham-Moran"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "AFC Waverton Vets",
+    "date": "2026-02-07",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null,
+    "notes": "Waverton conceded [CF]"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "St Mary's",
+    "date": "2026-02-07",
+    "venue": "Sandy Lane",
+    "result": "9-1",
+    "scorers": [
+      "Curran(3)",
+      "Archibald",
+      "N McQueen",
+      "McKendrick",
+      "McNulty",
+      "Shildhauer",
+      "OG"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "45+"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Rainhill Town",
+    "date": "2026-02-07",
+    "venue": "Prescot Leisure (Cup)",
+    "result": "0-3",
+    "scorers": [
+      "Hitchman (2)",
+      "Cummins"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Capenhurst Villa FC Vets",
+    "date": "2026-02-14",
+    "venue": "Chesterfield HS",
+    "result": "5-1",
+    "scorers": [
+      "Bergqvist (3)",
+      "Hay",
+      "Millington"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "CWFL",
+    "notes": "[CF]"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Eastham",
+    "date": "2026-02-14",
+    "venue": "Higher Bebington",
+    "result": "5-4",
+    "scorers": [
+      "Scott",
+      "Byrne",
+      "Archibald",
+      "Kirby"
+    ],
+    "homeAway": "Away",
+    "outcome": "Loss",
+    "type": "45+"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Mexoc",
+    "date": "2026-02-14",
+    "venue": "Halewood",
+    "result": "4-0",
+    "scorers": [
+      "Hitchman (2)",
+      "Clifton",
+      "Cummins"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Chester Nomads",
+    "date": "2026-02-21",
+    "venue": "Broughton Hall",
+    "result": "3-0",
+    "scorers": [],
+    "homeAway": "Away",
+    "outcome": "Loss",
+    "type": "FC"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Ashton",
+    "date": "2026-02-21",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Liobians",
+    "date": "2026-02-21",
+    "venue": "Heron Eccles (Cup)",
+    "result": "1-10",
+    "scorers": [
+      "Roden (3)",
+      "Cummins (2)",
+      "Hitchman(2)",
+      "Stott",
+      "Draper",
+      "Clifton"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 50s",
+    "opponent": "Queens Park",
+    "date": "2026-02-28",
+    "venue": "Sandy Lane",
+    "result": "1-9",
+    "scorers": [
+      "Smith"
+    ],
+    "homeAway": "Home",
+    "outcome": "Loss",
+    "type": "FCL"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Saltbox",
+    "date": "2026-02-28",
+    "venue": "Bill Shankley Grd",
+    "result": "5-1",
+    "scorers": [
+      "Cummins",
+      "Mooney",
+      "Roden",
+      "Hitchman",
+      "Rhodes"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Higher Beb Kelma Vets",
+    "date": "2026-03-07",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null,
+    "notes": "Kelma player availability [CF]"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Port Sunlight",
+    "date": "2026-03-07",
+    "venue": "Sandy Lane",
+    "result": "1-4",
+    "scorers": [
+      "Highton"
+    ],
+    "homeAway": "Home",
+    "outcome": "Loss",
+    "type": "FCM"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Orford",
+    "date": "2026-03-07",
+    "venue": "Halewood",
+    "result": "2-1",
+    "scorers": [
+      "Cummins",
+      "Hitchman"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Mersey Harps",
+    "date": "2026-03-14",
+    "venue": "Tiber Football",
+    "result": "2-4",
+    "scorers": [
+      "Cummins (2)",
+      "Hitchman",
+      "Roden"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Blacon Youth",
+    "date": "2026-03-21",
+    "venue": "Chesterfield HS",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null,
+    "notes": "Blacon Player availability [CF]"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Eastham",
+    "date": "2026-03-21",
+    "venue": "Sandy Lane",
+    "result": "2-1",
+    "scorers": [
+      "Jordan",
+      "French"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "45+"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "River Juniors",
+    "date": "2026-03-21",
+    "venue": "Halewood",
+    "result": "0-3",
+    "scorers": [],
+    "homeAway": "Home",
+    "outcome": "Loss",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Woolton Vets",
+    "date": "2026-03-28",
+    "venue": "Simpson Ground",
+    "result": "0-5",
+    "scorers": [
+      "Bishop (4)",
+      "Bergqvist"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "FC"
+  },
+  {
+    "team": "Over 50s",
+    "opponent": "Alsop",
+    "date": "2026-03-28",
+    "venue": "Sandy Lane",
+    "result": "3-4",
+    "scorers": [
+      "Smith",
+      "Quirk",
+      "OG"
+    ],
+    "homeAway": "Home",
+    "outcome": "Loss",
+    "type": "FCL"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Childwall Abbey",
+    "date": "2026-03-28",
+    "venue": "Halewood",
+    "result": "3-1",
+    "scorers": [
+      "OG",
+      "Roden",
+      "Higham-Moran"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Barry's Lodge FC",
+    "date": "2026-04-04",
+    "venue": "Halewood",
+    "result": "2-1",
+    "scorers": [
+      "Hitchman (2)"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Childwall Abbey",
+    "date": "2026-04-07",
+    "venue": "Mersey Rd",
+    "result": "2-7",
+    "scorers": [
+      "Roden (3)",
+      "Draper",
+      "Higham-Moran",
+      "Hitchman",
+      "Rhodes"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Capenhurst Villa FC Vets",
+    "date": "2026-04-11",
+    "venue": "Capenhurst Sports Club",
+    "result": "5-2",
+    "scorers": [
+      "D Stafford",
+      "Bishop"
+    ],
+    "homeAway": "Away",
+    "outcome": "Loss",
+    "type": "CWFL",
+    "notes": "[CF]"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Hartford",
+    "date": "2026-04-11",
+    "venue": "Sandy Lane",
+    "result": "3-0",
+    "scorers": [
+      "Curran",
+      "Smith",
+      "OG"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "FCM"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Old Xaverians A Team",
+    "date": "2026-04-15",
+    "venue": "SFX",
+    "result": "2-3",
+    "scorers": [
+      "Cummins",
+      "Hitchman",
+      "Roden"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Capenhurst Villa FC Vets (SF)",
+    "date": "2026-04-15",
+    "venue": "Capenhurst Sports Club",
+    "result": "0-2",
+    "scorers": [
+      "D Stafford",
+      "Hay"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "CWFL"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Crewe FC Vets (Sh Final)",
+    "date": "2026-04-18",
+    "venue": "Chesterfield HS",
+    "result": "5-2",
+    "scorers": [
+      "Hay",
+      "C McDoughall",
+      "K McDoughall",
+      "Parkinson",
+      "D Starfford"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "CWFL",
+    "notes": "[CF]"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Liobians",
+    "date": "2026-04-18",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null,
+    "notes": "Sefton Player Availability"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Mexoc",
+    "date": "2026-04-18",
+    "venue": "Simpson Ground",
+    "result": "2-3",
+    "scorers": [
+      "Hitchman",
+      "Roden (2)"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Winsford Town FC Vets",
+    "date": "2026-04-25",
+    "venue": "Knights Grange",
+    "result": "6-6",
+    "scorers": [
+      "Parkinson (4)",
+      "Hay (2)"
+    ],
+    "homeAway": "Away",
+    "outcome": "Draw",
+    "type": "CWFL",
+    "notes": "[CF]"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "SMA",
+    "date": "2026-04-25",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null,
+    "notes": "Sefton Player Availability"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "BRNESC (SF)",
+    "date": "2026-04-25",
+    "venue": "Halewood",
+    "result": "1-1 (4-2)",
+    "scorers": [
+      "Hitchman"
+    ],
+    "homeAway": "Home",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Doug Johnson Final",
+    "date": "2026-05-02",
+    "venue": "Poulton Vics",
+    "result": "1-4",
+    "scorers": [
+      "P Stafford"
+    ],
+    "homeAway": "Away",
+    "outcome": "Loss",
+    "type": "CWFL"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Queens Park",
+    "date": "2026-05-02",
+    "venue": "TBC",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": null
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Alumni",
+    "date": "2026-05-02",
+    "venue": "Halewood",
+    "result": "0-1",
+    "scorers": [],
+    "homeAway": "Home",
+    "outcome": "Loss",
+    "type": "OA"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "South Liverpool - CC Final",
+    "date": "2026-05-04",
+    "venue": "South Liverpool",
+    "result": "1-2",
+    "scorers": [
+      "Hitchman"
+    ],
+    "homeAway": "Away",
+    "outcome": "Loss",
+    "type": "OA"
+  },
+  {
+    "team": "Over 35s",
+    "opponent": "Mersey Royal FC",
+    "date": "2026-05-09",
+    "venue": "Chesterfield HS",
+    "result": null,
+    "scorers": [],
+    "homeAway": "TBC",
+    "outcome": "Postponed",
+    "type": "CWFL",
+    "notes": "[CF]"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "OAFC",
+    "date": "2026-05-09",
+    "venue": "Saltworks, Frodsham",
+    "result": "3-6",
+    "scorers": [
+      "McKendrick(2)",
+      "Jordan(2)",
+      "Curran",
+      "Byrne"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "45+"
+  },
+  {
+    "team": "Open Age",
+    "opponent": "Mossley Hill - Cup Final",
+    "date": "2026-05-09",
+    "venue": "Southport FC",
+    "result": "1-1 P3-4",
+    "scorers": [
+      "Hitchman"
+    ],
+    "homeAway": "Away",
+    "outcome": "Win",
+    "type": "OA"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Rockville",
+    "date": "2026-05-16",
+    "venue": "Away",
+    "result": "5-3",
+    "scorers": [
+      "Jordan",
+      "Martin",
+      "Auton"
+    ],
+    "homeAway": "Away",
+    "outcome": "Loss",
+    "type": "45+"
+  }
+]

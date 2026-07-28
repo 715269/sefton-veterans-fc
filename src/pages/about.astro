@@ -1,0 +1,130 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const committee = [
+  { role: 'Chairman', name: 'Geoff McKeating' },
+  { role: 'Secretary/Treasurer', name: 'Gerard Kinsella' },
+  { role: '+35 Fixtures', name: 'Robbie Halpin' },
+  { role: '+45 Fixtures', name: 'Brian Gilligan' },
+  { role: 'Social Secretary', name: 'Alan Roberts' },
+  { role: 'Member', name: 'Paul Jordan' },
+  { role: 'Member', name: 'Fran Armstrong' },
+  { role: 'Member', name: 'Chris Long' },
+  { role: 'Member', name: 'Gary Brookes' },
+];
+---
+
+<BaseLayout title="About">
+  <section class="hero-band">
+    <div class="container">
+      <h1>About Sefton Veterans FC</h1>
+      <p>Competitive friendly football in Sefton, Merseyside since 2011.</p>
+    </div>
+  </section>
+
+  <section class="section-padded container">
+    <h2>Our History</h2>
+    <p>
+      The majority of our original members are former long-standing players
+      and members of Waterloo Grammar School Old Boys Football Club, who
+      decided that in order to continue with the ethos of "competitive
+      friendly football for Over 35s" there was a need to establish this
+      progressive and forward-looking football club.
+    </p>
+    <p>
+      The club has grown into a strong and stable multi-cup winning
+      operation, attracting the best players from around Merseyside —
+      providing they fit with the club's high standards, on and off the
+      pitch.
+    </p>
+    <p>
+      In 2019, SVFC added a +50 team, now known as the Over 45s, playing
+      highly competitive games across Merseyside, Wirral and Cheshire. In
+      2023/24 the club welcomed an association with an open age team,
+      playing under the name Sefton OA FC. In 2025/26, the Over 35s entered
+      the Cheshire &amp; Wirral Football League (CWFL).
+    </p>
+  </section>
+
+  <section class="section-navy section-padded">
+    <div class="container">
+      <h2>Committee</h2>
+      <div class="card-grid">
+        {committee.map((person) => (
+          <div class="card committee-card">
+            <div class="card-body">
+              <h3>{person.name}</h3>
+              <p>{person.role}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section-padded container">
+    <h2>Honours Board</h2>
+    <p><em>Placeholder — add league titles, cup wins, and awards here.</em></p>
+    <table class="honours-table">
+      <thead>
+        <tr><th>Season</th><th>Honour</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>—</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </section>
+</BaseLayout>
+
+<style>
+  .hero-band {
+    background: var(--color-navy);
+    color: white;
+    padding: 2.5rem 0;
+  }
+
+  .hero-band h1 {
+    color: white;
+    margin-bottom: 0.5rem;
+  }
+
+  .hero-band p {
+    color: #cbd5e1;
+    margin: 0;
+  }
+
+  .committee-card {
+    background: white;
+  }
+
+  .committee-card .card-body h3 {
+    color: var(--color-navy);
+    font-size: 1rem;
+  }
+
+  .committee-card .card-body p {
+    color: var(--color-blue);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .honours-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+  }
+
+  .honours-table th {
+    background: var(--color-navy);
+    color: white;
+    text-align: left;
+    padding: 0.6rem 0.9rem;
+  }
+
+  .honours-table td {
+    padding: 0.6rem 0.9rem;
+    border-bottom: 1px solid #e2e8f0;
+  }
+</style>

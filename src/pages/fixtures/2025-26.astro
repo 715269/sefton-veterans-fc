@@ -1,0 +1,38 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FixturesTable from '../../components/FixturesTable.astro';
+import results from '../../data/results-2025-26.json';
+---
+
+<BaseLayout title="2025/26 Results">
+  <section class="hero-band">
+    <div class="container">
+      <h1>Results — 2025/26 Season</h1>
+      <p>Full results archive across Over 35s, Over 45s, Over 50s, and Open Age.</p>
+    </div>
+  </section>
+
+  <section class="section-padded container">
+    <p><a href="/fixtures">← Back to current fixtures</a></p>
+
+    <FixturesTable fixtures={results} />
+  </section>
+</BaseLayout>
+
+<style>
+  .hero-band {
+    background: var(--color-navy);
+    color: white;
+    padding: 2.5rem 0;
+  }
+
+  .hero-band h1 {
+    color: white;
+    margin-bottom: 0.5rem;
+  }
+
+  .hero-band p {
+    color: #cbd5e1;
+    margin: 0;
+  }
+</style>

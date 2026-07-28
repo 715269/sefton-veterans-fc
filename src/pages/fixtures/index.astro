@@ -1,0 +1,42 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FixturesTable from '../../components/FixturesTable.astro';
+import fixtures from '../../data/fixtures-2026-27.json';
+---
+
+<BaseLayout title="Fixtures">
+  <section class="hero-band">
+    <div class="container">
+      <h1>Fixtures &amp; Results — 2026/27</h1>
+      <p>Search, filter, and sort this season's fixtures below.</p>
+    </div>
+  </section>
+
+  <section class="section-padded container">
+    <p>
+      Looking for a previous season?
+      <a href="/fixtures/2025-26">2025/26 season →</a>
+      <!-- Add links to 2024/25 and 2023/24 here once those pages exist -->
+    </p>
+
+    <FixturesTable fixtures={fixtures} />
+  </section>
+</BaseLayout>
+
+<style>
+  .hero-band {
+    background: var(--color-navy);
+    color: white;
+    padding: 2.5rem 0;
+  }
+
+  .hero-band h1 {
+    color: white;
+    margin-bottom: 0.5rem;
+  }
+
+  .hero-band p {
+    color: #cbd5e1;
+    margin: 0;
+  }
+</style>

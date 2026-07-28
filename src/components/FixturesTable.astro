@@ -1,0 +1,305 @@
+---
+// FixturesTable.astro
+// This component receives an array of fixture objects (matching the shape
+// in src/data/fixtures-2025-26.json) and renders them as a searchable,
+// sortable table with a "Download CSV" button.
+//
+// Usage in a page:
+//   import fixtures from '../data/fixtures-2025-26.json';
+//   <FixturesTable fixtures={fixtures} />
+
+interface Fixture {
+  team: string;
+  opponent: string;
+  date: string;
+  venue: string;
+  result: string | null;
+  scorers: string[];
+  homeAway: string;
+  outcome: string;
+  type: string;
+}
+
+interface Props {
+  fixtures: Fixture[];
+}
+
+const { fixtures } = Astro.props;
+
+// Give every row a stable id so the client-side script can find it again
+// after filtering/sorting.
+const rows = fixtures.map((f, i) => ({ ...f, _id: i }));
+---
+
+<div class="fixtures-table-wrapper">
+  <div class="controls">
+    <input
+      type="text"
+      id="fixtures-search"
+      placeholder="Search opponent, team, or venue..."
+      aria-label="Search fixtures"
+    />
+
+    <select id="fixtures-team-filter" aria-label="Filter by team">
+      <option value="">All teams</option>
+      <option value="Over 35s">Over 35s</option>
+      <option value="Over 45s">Over 45s</option>
+      <option value="Over 50s">Over 50s</option>
+      <option value="Open Age">Open Age</option>
+    </select>
+
+    <select id="fixtures-outcome-filter" aria-label="Filter by outcome">
+      <option value="">All results</option>
+      <option value="Win">Wins</option>
+      <option value="Draw">Draws</option>
+      <option value="Loss">Losses</option>
+      <option value="Postponed">Postponed</option>
+      <option value="Unknown">Unrecorded</option>
+      <option value="Upcoming">Upcoming</option>
+    </select>
+
+    <button id="fixtures-csv-export" type="button">Download CSV</button>
+  </div>
+
+  <table id="fixtures-table">
+    <thead>
+      <tr>
+        <th data-sort="date">Date</th>
+        <th data-sort="team">Team</th>
+        <th data-sort="opponent">Opponent</th>
+        <th data-sort="venue">Venue</th>
+        <th data-sort="type">Type</th>
+        <th data-sort="result">Result</th>
+        <th>Scorers</th>
+        <th data-sort="outcome">Outcome</th>
+      </tr>
+    </thead>
+    <tbody>
+      {rows.map((f) => (
+        <tr
+          data-id={f._id}
+          data-team={f.team}
+          data-opponent={f.opponent}
+          data-venue={f.venue}
+          data-date={f.date}
+          data-outcome={f.outcome}
+          class={`outcome-${f.outcome.toLowerCase()}`}
+        >
+          <td>{new Date(f.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+          <td>{f.team}</td>
+          <td>{f.opponent}</td>
+          <td>{f.venue}</td>
+          <td>{f.type}</td>
+          <td>{f.result ?? 'TBC'}</td>
+          <td>{f.scorers.length > 0 ? f.scorers.join(', ') : '—'}</td>
+          <td><span class="outcome-badge">{f.outcome}</span></td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+  <p id="fixtures-empty-message" hidden>No fixtures match your search.</p>
+</div>
+
+<script>
+  // Everything below runs in the browser, after the page has loaded.
+  // It reads the table that Astro already rendered above and adds
+  // interactivity on top — no framework needed.
+
+  const table = document.getElementById('fixtures-table') as HTMLTableElement;
+  const tbody = table.querySelector('tbody')!;
+  const searchInput = document.getElementById('fixtures-search') as HTMLInputElement;
+  const teamFilter = document.getElementById('fixtures-team-filter') as HTMLSelectElement;
+  const outcomeFilter = document.getElementById('fixtures-outcome-filter') as HTMLSelectElement;
+  const csvButton = document.getElementById('fixtures-csv-export') as HTMLButtonElement;
+  const emptyMessage = document.getElementById('fixtures-empty-message') as HTMLParagraphElement;
+
+  const allRows = Array.from(tbody.querySelectorAll('tr'));
+
+  function applyFilters() {
+    const search = searchInput.value.trim().toLowerCase();
+    const team = teamFilter.value;
+    const outcome = outcomeFilter.value;
+    let visibleCount = 0;
+
+    for (const row of allRows) {
+      const haystack = [
+        row.dataset.team,
+        row.dataset.opponent,
+        row.dataset.venue,
+      ].join(' ').toLowerCase();
+
+      const matchesSearch = search === '' || haystack.includes(search);
+      const matchesTeam = team === '' || row.dataset.team === team;
+      const matchesOutcome = outcome === '' || row.dataset.outcome === outcome;
+
+      const visible = matchesSearch && matchesTeam && matchesOutcome;
+      row.hidden = !visible;
+      if (visible) visibleCount++;
+    }
+
+    emptyMessage.hidden = visibleCount > 0;
+  }
+
+  searchInput.addEventListener('input', applyFilters);
+  teamFilter.addEventListener('change', applyFilters);
+  outcomeFilter.addEventListener('change', applyFilters);
+
+  // Sorting: click a column header to sort by it, click again to reverse.
+  let currentSort = { key: '', ascending: true };
+
+  document.querySelectorAll('th[data-sort]').forEach((th) => {
+    th.addEventListener('click', () => {
+      const key = (th as HTMLElement).dataset.sort!;
+      const ascending = currentSort.key === key ? !currentSort.ascending : true;
+      currentSort = { key, ascending };
+
+      const sorted = [...allRows].sort((a, b) => {
+        const valA = a.dataset[key] ?? '';
+        const valB = b.dataset[key] ?? '';
+        return ascending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      });
+
+      sorted.forEach((row) => tbody.appendChild(row));
+    });
+  });
+
+  // CSV export: builds a CSV from whatever rows are currently visible
+  // (so if you've searched/filtered, the export matches what you see).
+  csvButton.addEventListener('click', () => {
+    const headers = ['Date', 'Team', 'Opponent', 'Venue', 'Type', 'Result', 'Scorers', 'Outcome'];
+    const visibleRows = allRows.filter((row) => !row.hidden);
+
+    const csvLines = [headers.join(',')];
+    for (const row of visibleRows) {
+      const cells = Array.from(row.querySelectorAll('td')).map((td) => {
+        const text = td.textContent?.replace(/"/g, '""') ?? '';
+        return `"${text}"`;
+      });
+      csvLines.push(cells.join(','));
+    }
+
+    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'sefton-veterans-fixtures.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+</script>
+
+<style>
+  .fixtures-table-wrapper {
+    width: 100%;
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .controls input,
+  .controls select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+  }
+
+  .controls input {
+    flex: 1 1 220px;
+  }
+
+  .controls button {
+    background: #2323e0;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .controls button:hover {
+    background: #1a1ab0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+  }
+
+  thead th {
+    background: #0f172a;
+    color: white;
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  thead th:not([data-sort]) {
+    cursor: default;
+  }
+
+  tbody td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  tbody tr:nth-child(even) {
+    background: #f8fafc;
+  }
+
+  .outcome-badge {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .outcome-win .outcome-badge {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .outcome-draw .outcome-badge {
+    background: #fef9c3;
+    color: #854d0e;
+  }
+
+  .outcome-loss .outcome-badge {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  .outcome-upcoming .outcome-badge {
+    background: #e0e7ff;
+    color: #2323e0;
+  }
+
+  .outcome-postponed .outcome-badge {
+    background: #f1f5f9;
+    color: #475569;
+  }
+
+  .outcome-unknown .outcome-badge {
+    background: #f1f5f9;
+    color: #94a3b8;
+  }
+
+  #fixtures-empty-message {
+    padding: 1rem;
+    text-align: center;
+    color: #64748b;
+  }
+</style>

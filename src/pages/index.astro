@@ -1,0 +1,207 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Home">
+  <section class="hero full-bleed">
+    <div class="hero-overlay">
+      <div class="container hero-content">
+        <h1>Welcome to Sefton Veterans FC</h1>
+        <p>
+          Competitive, friendly football for Over 35s, Over 45s, Over 50s,
+          and Open Age players across Sefton, Merseyside.
+        </p>
+        <div class="hero-buttons">
+          <a href="/fixtures" class="btn btn-primary">Fixtures &amp; Results</a>
+          <a href="/about" class="btn btn-outline">About the Club</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-padded container">
+    <h2>About Us</h2>
+    <div class="about-grid">
+      <div>
+        <p>
+          Sefton Veterans Football Club was founded in 2011. The club has
+          grown into a strong and stable multi-cup winning organisation,
+          attracting the best players from around Merseyside — providing
+          they fit with the club's ethos and high standards, on and off
+          the pitch.
+        </p>
+        <a href="/about" class="btn btn-primary">More about the club →</a>
+      </div>
+      <img
+        src="https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=600/dOqbneo9QpTgEjPz/seftonbadge240-m2W4XpOvGGHDMa71.png"
+        alt="Sefton Veterans FC club badge"
+        class="about-badge"
+      />
+    </div>
+  </section>
+
+  <section class="section-navy section-padded">
+    <div class="container">
+      <h2>Our Teams</h2>
+      <div class="card-grid">
+        <a href="/teams/over-35s" class="card team-card">
+          <div class="card-body">
+            <h3>Over 35s</h3>
+            <p>Competing in the Cheshire &amp; Wirral Football League Premier Division.</p>
+          </div>
+        </a>
+        <a href="/teams/over-45s" class="card team-card">
+          <div class="card-body">
+            <h3>Over 45s</h3>
+            <p>Friendly and cup football across Merseyside, Wirral and Cheshire.</p>
+          </div>
+        </a>
+        <a href="/teams/over-50s" class="card team-card">
+          <div class="card-body">
+            <h3>Over 50s</h3>
+            <p>Legends Cup and friendly fixtures for our most experienced squad.</p>
+          </div>
+        </a>
+        <a href="/teams/open-age" class="card team-card">
+          <div class="card-body">
+            <h3>Open Age</h3>
+            <p>Playing as Sefton OA FC since the 2023/24 season.</p>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-padded container">
+    <h2>Club Life</h2>
+    <div class="photo-grid">
+      <img
+        src="https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=700,h=500,fit=crop/dOqbneo9QpTgEjPz/agm-game-2024-YX4P7oMeOeUbVw6q.jpg"
+        alt="Sefton Veterans FC match action"
+      />
+      <img
+        src="https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=700,h=500,fit=crop/dOqbneo9QpTgEjPz/img20221029150737-1-AzGrWJDPlbu24N4r.jpg"
+        alt="Sefton Veterans FC players"
+      />
+      <img
+        src="https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=700,h=500,fit=crop/dOqbneo9QpTgEjPz/img20231014143126-AE0pw8p6k0T8bvPG.jpg"
+        alt="Sefton Veterans FC on the pitch"
+      />
+    </div>
+  </section>
+
+  <section class="section-light section-padded">
+    <div class="container">
+      <h2>Our Sponsors</h2>
+      <p>Everyone at the club is very grateful for the kind and generous support of our sponsors for the 2025/26 season.</p>
+      <div class="sponsor-grid">
+        <a href="https://www.sep-insurance.co.uk/about/" target="_blank" rel="noopener noreferrer">
+          <img
+            src="https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=400/dOqbneo9QpTgEjPz/sep-insurance-logo-1-mv0jgXynaWiL1lXL.png"
+            alt="SEP Insurance Services logo"
+          />
+        </a>
+        <a href="https://www.sepprofessional.com/about-us/" target="_blank" rel="noopener noreferrer">
+          <img
+            src="https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=400/dOqbneo9QpTgEjPz/sep-ps-logo-A1aKRNDxLefpp5JB.png"
+            alt="SEP Professional Services logo"
+          />
+        </a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .hero {
+    position: relative;
+    background-image: url('https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=1920/dOqbneo9QpTgEjPz/wazza7_c302-A1aKW5kMxZHb9Rb1.jpg');
+    background-size: cover;
+    background-position: center;
+  }
+
+  .hero-overlay {
+    background: linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.6));
+    padding: 5rem 0;
+  }
+
+  .hero-content {
+    max-width: 700px;
+  }
+
+  .hero-content h1 {
+    color: white;
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .hero-content p {
+    color: #e2e8f0;
+    font-size: 1.15rem;
+    margin-bottom: 1.75rem;
+  }
+
+  .hero-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .about-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 2rem;
+    align-items: center;
+  }
+
+  .about-badge {
+    width: 100%;
+    max-width: 220px;
+    justify-self: center;
+  }
+
+  .team-card {
+    background: white;
+  }
+
+  .team-card .card-body h3 {
+    color: var(--color-navy);
+  }
+
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .photo-grid img {
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    border-radius: 10px;
+  }
+
+  .sponsor-grid {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 1.5rem;
+  }
+
+  .sponsor-grid img {
+    max-width: 220px;
+    height: auto;
+  }
+
+  @media (max-width: 700px) {
+    .about-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .hero-content h1 {
+      font-size: 1.9rem;
+    }
+  }
+</style>

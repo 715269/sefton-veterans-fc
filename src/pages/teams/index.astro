@@ -1,0 +1,77 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const teams = [
+  {
+    slug: 'over-35s',
+    name: 'Over 35s',
+    blurb: 'Competing in the Cheshire & Wirral Football League Premier Division.',
+    image: 'https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=600,h=400,fit=crop/dOqbneo9QpTgEjPz/agm-game-2024-YX4P7oMeOeUbVw6q.jpg',
+  },
+  {
+    slug: 'over-45s',
+    name: 'Over 45s',
+    blurb: 'Friendly and cup football across Merseyside, Wirral and Cheshire.',
+    image: 'https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=600,h=400,fit=crop/dOqbneo9QpTgEjPz/img20221029150737-1-AzGrWJDPlbu24N4r.jpg',
+  },
+  {
+    slug: 'over-50s',
+    name: 'Over 50s',
+    blurb: 'Legends Cup and friendly fixtures for our most experienced squad.',
+    image: 'https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=600,h=400,fit=crop/dOqbneo9QpTgEjPz/img20231014143126-AE0pw8p6k0T8bvPG.jpg',
+  },
+  {
+    slug: 'open-age',
+    name: 'Open Age',
+    blurb: 'Playing as Sefton OA FC since the 2023/24 season.',
+    image: 'https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=600,h=400,fit=crop/dOqbneo9QpTgEjPz/agm-game-2024-YX4P7oMeOeUbVw6q.jpg',
+  },
+];
+---
+
+<BaseLayout title="Teams">
+  <section class="hero-band">
+    <div class="container">
+      <h1>Our Teams</h1>
+      <p>Four squads, one club — competitive football for every age group.</p>
+    </div>
+  </section>
+
+  <section class="section-padded container">
+    <div class="card-grid">
+      {teams.map((team) => (
+        <a href={`/teams/${team.slug}`} class="card">
+          <img src={team.image} alt={`${team.name} team photo`} />
+          <div class="card-body">
+            <h3>{team.name}</h3>
+            <p>{team.blurb}</p>
+          </div>
+        </a>
+      ))}
+    </div>
+    <p class="note"><em>Individual team pages aren't built yet — these link out but are placeholders for now.</em></p>
+  </section>
+</BaseLayout>
+
+<style>
+  .hero-band {
+    background: var(--color-navy);
+    color: white;
+    padding: 2.5rem 0;
+  }
+
+  .hero-band h1 {
+    color: white;
+    margin-bottom: 0.5rem;
+  }
+
+  .hero-band p {
+    color: #cbd5e1;
+    margin: 0;
+  }
+
+  .note {
+    color: #64748b;
+    font-size: 0.9rem;
+  }
+</style>
