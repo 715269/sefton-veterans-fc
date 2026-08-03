@@ -1,0 +1,341 @@
+---
+// src/components/MatchdayStrip.astro
+//
+// One row per team: how they got on last time, and when they're out next.
+// The result is a trigger that opens the same teamsheet drawer as the fixtures
+// page, so the front page is one tap from who played and who scored.
+//
+// A note on staleness. This is a static site, so "next fixture" is worked out
+// against the date at the moment Netlify builds. If nothing triggers a build
+// for a fortnight, a purely build-time answer would confidently announce a
+// match that was played last Saturday — worse than saying nothing.
+//
+// So each team's next FIVE confirmed fixtures are rendered into the page, and
+// a few lines of script at the bottom pick the first one that hasn't happened
+// yet, in the visitor's own present tense. The page corrects itself between
+// builds. Results can't self-correct the same way — a result only exists once
+// a report is filed — but a result arriving late is stale, not wrong.
+
+import { getSeason, getResults, getUpcoming } from '../lib/season.js';
+import { orderTeams } from '../lib/teams.js';
+import MatchDetail from './MatchDetail.astro';
+
+const season = await getSeason();
+const today = new Date().toISOString().slice(0, 10);
+
+const teams = orderTeams([...new Set(season.map((f) => f.team).filter(Boolean))]);
+
+// If nobody has a future date left, the season is over. No hardcoded end date.
+const seasonRunning = season.some((f) => !f.played && f.date >= today);
+
+const rows = await Promise.all(
+  teams.map(async (team) => {
+    const results = await getResults(team);
+    const upcoming = await getUpcoming(team);
+
+    return {
+      team,
+      // getResults() is newest first, so this takes the most recent match that
+      // has actually been played. A result dated in the future is always a
+      // mistake — a mis-typed year, or a report filed against the wrong row —
+      // and the front page shouldn't repeat it back as fact. The fixtures page
+      // still shows everything, so nothing is hidden, just not headlined.
+      last: results.find((r) => r.date <= today) || null,
+      // Five, not one, so the script below has somewhere to go if the build
+      // is old. Provisional dates are excluded from the headline.
+      next: upcoming.filter((f) => !f.provisional).slice(0, 5),
+      // A reserved date with no opponent yet — the fallback if there's no
+      // confirmed fixture to show.
+      reserved: upcoming.find((f) => f.provisional) || null
+    };
+  })
+);
+
+// Only the matches actually shown in the strip go to the drawer, so the home
+// page carries four teamsheets rather than the whole season.
+const shownMatches = rows.map((r) => r.last).filter(Boolean);
+
+function prettyDate(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return iso || '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return days[d.getDay()] + ' ' + Number(m[3]) + ' ' + months[Number(m[2]) - 1];
+}
+
+// The fixtures file uses homeAway; older rows used venue. Accept either.
+function venueLetter(f) {
+  const v = String(f.homeAway || f.venue || '').trim().toLowerCase();
+  if (v.charAt(0) === 'h') return 'H';
+  if (v.charAt(0) === 'a') return 'A';
+  return '';
+}
+
+function outcomeLetter(outcome) {
+  if (outcome === 'Win') return 'W';
+  if (outcome === 'Loss') return 'L';
+  if (outcome === 'Draw') return 'D';
+  return '?';
+}
+---
+
+<section class="matchday">
+  <div class="matchday-head">
+    <h2>Matchday</h2>
+    <a href="/fixtures">All fixtures &amp; results →</a>
+  </div>
+
+  <div class="strip">
+    <div class="strip-header" aria-hidden="true">
+      <span>Team</span>
+      <span>Last time out</span>
+      <span>Next up</span>
+    </div>
+
+    {rows.map((row) => (
+      <div class="strip-row">
+        <span class="team-name">{row.team}</span>
+
+        <div class="cell">
+          <span class="cell-label">Last time out</span>
+          {row.last ? (
+            <div
+              class="result"
+              data-md-row
+              data-date={row.last.date}
+              data-team={row.last.team}
+              data-opponent={row.last.opponent}
+            >
+              <span class={'badge badge-' + outcomeLetter(row.last.outcome).toLowerCase()}>
+                {outcomeLetter(row.last.outcome)}
+              </span>
+              <span class="score">{row.last.result}</span>
+              <span class="muted">v {row.last.opponent}</span>
+              <span class="chev" aria-hidden="true">›</span>
+            </div>
+          ) : (
+            <span class="muted">No matches played yet</span>
+          )}
+        </div>
+
+        <div class="cell">
+          <span class="cell-label">Next up</span>
+          <div class="next" data-next>
+            {row.next.map((f, i) => (
+              <div class="fixture" data-date={f.date} hidden={i !== 0}>
+                <span class="opponent">
+                  v {f.opponent}
+                  {venueLetter(f) && <span class="muted"> ({venueLetter(f)})</span>}
+                </span>
+                <span class="when">{prettyDate(f.date)}</span>
+              </div>
+            ))}
+
+            <div class="fixture" data-fallback hidden={row.next.length > 0}>
+              {row.reserved ? (
+                <>
+                  <span class="opponent muted">Opponent TBC</span>
+                  <span class="when">{prettyDate(row.reserved.date)}</span>
+                </>
+              ) : (
+                <span class="opponent muted">
+                  {seasonRunning ? 'Fixture pending' : 'Season complete'}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+</section>
+
+<MatchDetail fixtures={shownMatches} />
+
+<script>
+  // Runs in the visitor's browser, so "today" is their today, not the build's.
+  // Shows the first fixture that hasn't happened, and falls back to the
+  // pending/TBC message if the build is old enough that all five have passed.
+  (function () {
+    var today = new Date();
+    var iso = today.getFullYear() + '-' +
+              String(today.getMonth() + 1).padStart(2, '0') + '-' +
+              String(today.getDate()).padStart(2, '0');
+
+    document.querySelectorAll('[data-next]').forEach(function (group) {
+      var fixtures = group.querySelectorAll('.fixture[data-date]');
+      var fallback = group.querySelector('[data-fallback]');
+      var found = false;
+
+      fixtures.forEach(function (el) {
+        var upcoming = !found && el.getAttribute('data-date') >= iso;
+        el.hidden = !upcoming;
+        if (upcoming) found = true;
+      });
+
+      if (fallback) fallback.hidden = found;
+    });
+  })();
+</script>
+
+<style>
+  .matchday {
+    margin: 0;
+  }
+
+  .matchday-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+
+  .matchday-head h2 {
+    margin: 0;
+  }
+
+  .matchday-head a {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-blue, #2323e0);
+    text-decoration: none;
+  }
+
+  .strip {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .strip-header,
+  .strip-row {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr 1.4fr;
+    gap: 1rem;
+    padding: 0.85rem 1.25rem;
+    align-items: center;
+  }
+
+  .strip-header {
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+
+  .strip-row + .strip-row {
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .team-name {
+    font-weight: 600;
+    color: var(--color-navy, #0f172a);
+  }
+
+  /* Shown only once the rows stack on mobile, where the header disappears. */
+  .cell-label {
+    display: none;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-bottom: 0.15rem;
+  }
+
+  /* The negative margin lets the hover tint sit slightly proud of the text
+     without shifting the layout when it isn't hovered. */
+  .result {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: -0.35rem -0.6rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 8px;
+    transition: background 0.15s ease;
+  }
+
+  .result[data-md-open]:hover {
+    background: #eef2ff;
+  }
+
+  /* Only appears once MatchDetail has confirmed there's something to open,
+     since it sets data-md-open. */
+  .chev {
+    margin-left: auto;
+    color: #94a3b8;
+    font-size: 1.1rem;
+    line-height: 1;
+    display: none;
+  }
+
+  .result[data-md-open] .chev {
+    display: block;
+  }
+
+  .badge {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .badge-w { background: #dcfce7; color: #166534; }
+  .badge-d { background: #f1f5f9; color: #475569; }
+  .badge-l { background: #fee2e2; color: #991b1b; }
+
+  .score {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--color-navy, #0f172a);
+  }
+
+  .muted {
+    color: #64748b;
+  }
+
+  .opponent {
+    display: block;
+  }
+
+  .when {
+    display: block;
+    font-size: 0.82rem;
+    color: #64748b;
+    margin-top: 0.1rem;
+  }
+
+  @media (max-width: 760px) {
+    .strip-header {
+      display: none;
+    }
+
+    .strip-row {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+      padding: 1rem 1.25rem;
+    }
+
+    .team-name {
+      font-size: 1.05rem;
+    }
+
+    .cell-label {
+      display: block;
+    }
+  }
+</style>

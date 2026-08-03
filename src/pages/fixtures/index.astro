@@ -1,7 +1,9 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import FixturesTable from '../../components/FixturesTable.astro';
-import fixtures from '../../data/fixtures-2026-27.json';
+import { getSeason } from '../../lib/season.js';
+import MatchDetail from '../../components/MatchDetail.astro';
+const fixtures = await getSeason();
 ---
 
 <BaseLayout title="Fixtures">
@@ -20,6 +22,7 @@ import fixtures from '../../data/fixtures-2026-27.json';
     </p>
 
     <FixturesTable fixtures={fixtures} />
+    <MatchDetail fixtures={fixtures} />
   </section>
 </BaseLayout>
 

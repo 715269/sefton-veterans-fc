@@ -1,30 +1,34 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import { Image } from 'astro:assets';
+import agmGame from '../../assets/agm-game-2024.jpg';
+import squad2022 from '../../assets/squad-2022.jpg';
+import squad2023 from '../../assets/squad-2023.jpg';
 
 const teams = [
   {
     slug: 'over-35s',
     name: 'Over 35s',
     blurb: 'Competing in the Cheshire & Wirral Football League Premier Division.',
-    image: 'https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=600,h=400,fit=crop/dOqbneo9QpTgEjPz/agm-game-2024-YX4P7oMeOeUbVw6q.jpg',
+    image: agmGame,
   },
   {
     slug: 'over-45s',
     name: 'Over 45s',
     blurb: 'Friendly and cup football across Merseyside, Wirral and Cheshire.',
-    image: 'https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=600,h=400,fit=crop/dOqbneo9QpTgEjPz/img20221029150737-1-AzGrWJDPlbu24N4r.jpg',
+    image: squad2022,
   },
   {
     slug: 'over-50s',
     name: 'Over 50s',
     blurb: 'Legends Cup and friendly fixtures for our most experienced squad.',
-    image: 'https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=600,h=400,fit=crop/dOqbneo9QpTgEjPz/img20231014143126-AE0pw8p6k0T8bvPG.jpg',
+    image: squad2023,
   },
   {
     slug: 'open-age',
     name: 'Open Age',
     blurb: 'Playing as Sefton OA FC since the 2023/24 season.',
-    image: 'https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=600,h=400,fit=crop/dOqbneo9QpTgEjPz/agm-game-2024-YX4P7oMeOeUbVw6q.jpg',
+    image: agmGame,
   },
 ];
 ---
@@ -41,7 +45,12 @@ const teams = [
     <div class="card-grid">
       {teams.map((team) => (
         <a href={`/teams/${team.slug}`} class="card">
-          <img src={team.image} alt={`${team.name} team photo`} />
+          <Image
+            src={team.image}
+            alt={`${team.name} team photo`}
+            width={600}
+            height={450}
+          />
           <div class="card-body">
             <h3>{team.name}</h3>
             <p>{team.blurb}</p>
@@ -68,6 +77,16 @@ const teams = [
   .hero-band p {
     color: #cbd5e1;
     margin: 0;
+  }
+
+  /* The source photos are 4:3, but the cards want a wider band. Astro resizes
+     at the native ratio (600x450) and the crop happens here, because handing
+     Astro a mismatched width/height squashes the picture instead of cropping. */
+  .card img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    display: block;
   }
 
   .note {

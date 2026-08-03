@@ -1,0 +1,1997 @@
+---
+// Captains' weekly match report — replaces the Google Form's job,
+// writes to the same spreadsheet via the Apps Script web app.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import players from '../data/players.json';
+import { getSquads, getSeason, getPositions, getFixtures } from '../lib/season.js';
+// The fixture list comes from the Fixtures tab in the spreadsheet, falling
+// back to the local file if the feed is unreachable.
+const FIXTURES = await getFixtures();
+
+// The Roster tab in the spreadsheet is the living squad list — it grows every
+// time a captain adds someone. players.json is only used as a fallback if the
+// feed cannot be reached during the build.
+const squads = await getSquads(players);
+
+// Each player's usual position, learned from previous reports, so a captain
+// only has to set it once rather than every week.
+const POSITIONS = await getPositions();
+
+// Which fixtures already have a report, so a captain can be told before he
+// files a second one over the top of it.
+const season = await getSeason();
+const FILED = {};
+for (const f of season) {
+  if (!f.played || !f.detail) continue;
+  FILED[[f.date, f.team, f.opponent].join('|').toLowerCase()] = {
+    captain: f.detail.captain || '',
+    submittedAt: f.detail.submittedAt || '',
+    result: f.result || ''
+  };
+}
+
+// Both read from .env, so replacing this file never loses your settings.
+// PUBLIC_ because they are needed in the browser — see the note about the
+// secret being visible in page source.
+const ENDPOINT = import.meta.env.PUBLIC_REPORT_ENDPOINT || '';
+const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
+---
+
+<BaseLayout title="Match Report">
+<div class="mr" id="mr">
+  <header class="mr-head">
+    <p class="mr-eyebrow">Captain's report</p>
+    <h1>Match report</h1>
+    <ol class="mr-rail" id="mr-rail">
+      <li data-state="now">Match</li>
+      <li>Squad</li>
+      <li>Goals &amp; notes</li>
+    </ol>
+  </header>
+
+  <!-- ============ STEP 1 — the match ============ -->
+  <section class="mr-panel is-active" data-panel="1" aria-label="Match details">
+    <div class="mr-field">
+      <span class="mr-label" id="lbl-team">Which team?</span>
+      <div class="mr-choices" id="mr-teams" role="group" aria-labelledby="lbl-team"></div>
+    </div>
+
+    <div class="mr-field" id="mr-fixture-field" hidden>
+      <label class="mr-label" for="mr-fixture">Which match?</label>
+      <select id="mr-fixture"></select>
+      <span class="mr-hint">From this team's fixture list. Pick "Not listed" for a friendly or a rearranged game.</span>
+    </div>
+
+    <p class="mr-filed" id="mr-filed" role="status" hidden></p>
+
+    <div class="mr-field">
+      <label class="mr-label" for="mr-captain">Your name</label>
+      <input type="text" id="mr-captain" autocomplete="name" enterkeyhint="next" />
+    </div>
+
+    <div id="mr-manual">
+      <div class="mr-field">
+        <label class="mr-label" for="mr-opponent">Opponent</label>
+        <input type="text" id="mr-opponent" autocapitalize="words" enterkeyhint="next" />
+      </div>
+
+      <div class="mr-field">
+        <span class="mr-label" id="lbl-venue">Home or away?</span>
+        <div class="mr-choices is-pair" id="mr-venue" role="group" aria-labelledby="lbl-venue">
+          <button type="button" class="mr-choice" data-venue="Home" aria-pressed="false">Home</button>
+          <button type="button" class="mr-choice" data-venue="Away" aria-pressed="false">Away</button>
+        </div>
+      </div>
+
+      <div class="mr-field">
+        <label class="mr-label" for="mr-date">Match date</label>
+        <input type="date" id="mr-date" />
+        <span class="mr-hint">Defaults to today.</span>
+      </div>
+    </div>
+
+    <div class="mr-field">
+      <span class="mr-label">Final score</span>
+      <div class="mr-score">
+        <div class="mr-scorebox">
+          <h3 id="mr-us-label">Sefton</h3>
+          <div class="mr-stepper">
+            <button type="button" class="mr-step-btn" data-score="for" data-dir="-1" aria-label="One fewer for Sefton">&minus;</button>
+            <span class="mr-step-val" id="mr-score-for" aria-live="polite" aria-labelledby="mr-us-label">0</span>
+            <button type="button" class="mr-step-btn" data-score="for" data-dir="1" aria-label="One more for Sefton">+</button>
+          </div>
+        </div>
+        <div class="mr-scorebox">
+          <h3 id="mr-them-label">Opponent</h3>
+          <div class="mr-stepper">
+            <button type="button" class="mr-step-btn" data-score="against" data-dir="-1" aria-label="One fewer for the opponent">&minus;</button>
+            <span class="mr-step-val" id="mr-score-against" aria-live="polite" aria-labelledby="mr-them-label">0</span>
+            <button type="button" class="mr-step-btn" data-score="against" data-dir="1" aria-label="One more for the opponent">+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STEP 2 — the squad ============ -->
+  <section class="mr-panel" data-panel="2" aria-label="Squad">
+    <div class="mr-sheet">
+      <div class="mr-sheet-head">
+        <h2>Teamsheet</h2>
+        <span class="mr-count" id="mr-count" aria-live="polite">Nobody named yet</span>
+      </div>
+      <div id="mr-sheet-starts" hidden>
+        <h3 class="mr-sheet-sub">Starting</h3>
+        <ol id="mr-sheet-list"></ol>
+      </div>
+      <div id="mr-sheet-bench-wrap" hidden>
+        <h3 class="mr-sheet-sub">Bench</h3>
+        <ol id="mr-sheet-bench"></ol>
+      </div>
+      <p class="mr-sheet-empty" id="mr-sheet-empty">Tap a name below to add them.</p>
+      <p class="mr-sheet-warn" id="mr-sheet-warn" hidden></p>
+    </div>
+
+    <div class="mr-search-wrap">
+      <label class="mr-label" for="mr-search">Squad</label>
+      <span class="mr-hint" style="margin: 0 0 0.45rem;">Everyone you add starts. Tap Bench for the ones who came on.</span>
+      <input type="text" id="mr-search" placeholder="Search for a name" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search" />
+    </div>
+
+    <ul class="mr-list" id="mr-squad"></ul>
+    <p class="mr-none" id="mr-no-match" hidden>No one by that name. Add them below as a guest.</p>
+
+    <div class="mr-field" style="margin-top: 1.5rem;">
+      <label class="mr-label" for="mr-guest">Played but not listed?</label>
+      <input type="text" id="mr-guest" placeholder="Surname, Forename" autocapitalize="words" enterkeyhint="done" />
+      <span class="mr-hint">One at a time — type the name and tap Add. They join the squad list permanently.</span>
+      <button type="button" class="mr-btn mr-btn-ghost" id="mr-guest-add" style="margin-top: 0.6rem; width: 100%;">Add player</button>
+    </div>
+  </section>
+
+  <!-- ============ STEP 3 — goals and notes ============ -->
+  <section class="mr-panel" data-panel="3" aria-label="Goals and notes">
+    <div class="mr-field">
+      <span class="mr-label" id="lbl-scorers">Who scored?</span>
+      <div id="mr-goals"></div>
+      <select id="mr-add-scorer" aria-labelledby="lbl-scorers"></select>
+      <p class="mr-tally" id="mr-tally"></p>
+    </div>
+
+    <div class="mr-field">
+      <label class="mr-label" for="mr-notes">Match summary</label>
+      <textarea id="mr-notes" placeholder="How the game went — optional, but it appears on the website."></textarea>
+    </div>
+
+    <p class="mr-filed" id="mr-replacing" role="status" hidden></p>
+
+    <div class="mr-review">
+      <dl id="mr-review"></dl>
+    </div>
+  </section>
+
+  <!-- ============ Sent ============ -->
+  <section class="mr-panel" data-panel="4" aria-label="Report sent">
+    <div class="mr-done">
+      <div class="tick" aria-hidden="true">✓</div>
+      <h2 id="mr-done-head">Report sent</h2>
+      <p id="mr-done-body">Thanks — it's in the spreadsheet.</p>
+      <button type="button" class="mr-btn mr-btn-ghost" id="mr-again" style="margin-top: 1rem;">File another report</button>
+    </div>
+  </section>
+
+  <div class="mr-bar">
+    <div class="mr-bar-inner">
+      <button type="button" class="mr-btn mr-btn-ghost" id="mr-back" hidden>Back</button>
+      <button type="button" class="mr-btn mr-btn-primary" id="mr-next">Next</button>
+    </div>
+  </div>
+  <p class="mr-saved" id="mr-saved"></p>
+</div>
+</BaseLayout>
+
+<script is:inline define:vars={{ SQUADS: squads, FIXTURES, FILED, POSITIONS, ENDPOINT, SHARED_SECRET }}>
+  /* Expects: SQUADS, FIXTURES, FILED, POSITIONS, ENDPOINT, SHARED_SECRET */
+
+  var TEAM_ORDER = ['Over 35s', 'Over 45s', 'Over 50s', 'Open Age'];
+  var DRAFT_KEY = 'svfc-report-draft-v1';
+  var QUEUE_KEY = 'svfc-report-queue-v1';
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function newId() {
+    if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+    return 'r-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  var state = {
+    step: 1,
+    reportId: newId(),
+    team: '',
+    captain: '',
+    opponent: '',
+    homeAway: '',
+    matchDate: new Date().toISOString().slice(0, 10),
+    fixtureKey: '',
+    confirmedReplace: false,
+    competition: '',
+    scoreFor: 0,
+    scoreAgainst: 0,
+    players: {},   /* name -> { role, subsPaid, booked, sentOff, goals } */
+    ownGoals: 0,   /* opposition own goals — count for us, belong to nobody */
+    shortSide: false,  /* set when the captain confirms they played short */
+    noKeeper: false,   /* set when the captain confirms nobody kept goal */
+    order: [],     /* selection order, so the teamsheet reads like one */
+    guests: [],
+    notes: ''
+  };
+
+  var sending = false;
+
+  /* ---------------- draft ---------------- */
+
+  function saveDraft() {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(state));
+      var el = $('mr-saved');
+      el.textContent = 'Draft saved on this phone';
+      clearTimeout(saveDraft.t);
+      saveDraft.t = setTimeout(function () { el.textContent = ''; }, 2000);
+    } catch (err) { /* private browsing, full storage — not worth interrupting for */ }
+  }
+
+  function loadDraft() {
+    try {
+      var raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return false;
+      var saved = JSON.parse(raw);
+      if (!saved || typeof saved !== 'object') return false;
+      Object.keys(state).forEach(function (k) {
+        if (saved[k] !== undefined && saved[k] !== null) state[k] = saved[k];
+      });
+      state.step = Math.min(state.step, 3);
+      if (!state.reportId) state.reportId = newId();
+      return true;
+    } catch (err) { return false; }
+  }
+
+  function clearDraft() {
+    try { localStorage.removeItem(DRAFT_KEY); } catch (err) {}
+  }
+
+  /* ---------------- helpers ---------------- */
+
+  function squadFor(team) {
+    var base = (SQUADS && SQUADS[team]) ? SQUADS[team].slice() : [];
+    state.guests.forEach(function (name) {
+      if (base.indexOf(name) === -1) base.push(name);
+    });
+    return base.sort(function (a, b) { return a.localeCompare(b); });
+  }
+
+  function selectedNames() {
+    return state.order.filter(function (n) { return !!state.players[n]; });
+  }
+
+  function positionRank(name) {
+    var pos = state.players[name] && state.players[name].position;
+    return POSITION_ORDER[pos] === undefined ? 9 : POSITION_ORDER[pos];
+  }
+
+  function startersOf() {
+    var list = selectedNames().filter(function (n) { return state.players[n].role !== 'bench'; });
+    // Back to front, as a teamsheet reads. Anyone unassigned goes last.
+    return list.sort(function (a, b) { return positionRank(a) - positionRank(b); });
+  }
+
+  function benchOf() {
+    return selectedNames().filter(function (n) { return state.players[n].role === 'bench'; });
+  }
+
+  /* ---------------- fixtures ---------------- */
+
+  var MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+  function toISODate(raw) {
+    if (!raw) return '';
+    var s = String(raw).trim();
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);            /* 2026-08-15 */
+    if (m) return m[1] + '-' + m[2] + '-' + m[3];
+    m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);  /* 15/08/2026, UK order */
+    if (m) return m[3] + '-' + pad(m[2]) + '-' + pad(m[1]);
+    m = s.match(/(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{4})/); /* Sat 15 Aug 2026 */
+    if (m) {
+      var mi = MONTHS.indexOf(m[2].toLowerCase());
+      if (mi > -1) return m[3] + '-' + pad(mi + 1) + '-' + pad(m[1]);
+    }
+    var d = new Date(s);
+    return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+  }
+
+  function pad(n) { return String(n).length < 2 ? '0' + n : String(n); }
+
+  function readVenue(f) {
+    var v = f.homeAway || f.venue || f.home_away || '';
+    v = String(v).trim().toLowerCase();
+    if (v.charAt(0) === 'h') return 'Home';
+    if (v.charAt(0) === 'a') return 'Away';
+    return '';
+  }
+
+  function fixturesFor(team) {
+    if (!Array.isArray(FIXTURES)) return [];
+    return FIXTURES
+      .filter(function (f) { return f && f.team === team; })
+      .map(function (f) {
+        return {
+          opponent: String(f.opponent || '').trim(),
+          date: toISODate(f.date),
+          homeAway: readVenue(f),
+          competition: String(f.competition || f.type || '').trim()
+        };
+      })
+      .filter(function (f) {
+        return f.opponent && f.opponent.toUpperCase() !== 'TBC' && f.opponent !== '—';
+      })
+      .sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
+  }
+
+  function fixtureKeyOf(f) { return f.date + '|' + f.opponent + '|' + f.homeAway; }
+
+  function prettyDate(iso) {
+    var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return iso || '';
+    var names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return Number(m[3]) + ' ' + names[Number(m[2]) - 1] + ' ' + m[1];
+  }
+
+  function buildFixtures() {
+    var field = $('mr-fixture-field');
+    var sel = $('mr-fixture');
+    var list = state.team ? fixturesFor(state.team) : [];
+
+    field.hidden = !state.team || list.length === 0;
+    sel.innerHTML = '';
+
+    var first = document.createElement('option');
+    first.value = '';
+    first.textContent = 'Choose the match…';
+    sel.appendChild(first);
+
+    var today = new Date().toISOString().slice(0, 10);
+    list.forEach(function (f) {
+      var o = document.createElement('option');
+      o.value = fixtureKeyOf(f);
+      o.textContent = prettyDate(f.date) + ' — ' + f.opponent +
+        (f.homeAway ? ' (' + f.homeAway.charAt(0) + ')' : '') +
+        (f.date > today ? ' — to come' : '');
+      sel.appendChild(o);
+    });
+
+    var other = document.createElement('option');
+    other.value = 'other';
+    other.textContent = 'Not listed — friendly or rearranged';
+    sel.appendChild(other);
+
+    sel.value = state.fixtureKey || '';
+    if (sel.value !== state.fixtureKey) state.fixtureKey = '';
+    applyFixture();
+  }
+
+  // A report already on file for this fixture, or null.
+  function alreadyFiled() {
+    if (!state.team || !state.opponent || !state.matchDate) return null;
+    var lookup = (typeof FILED === 'object' && FILED) || {};
+    var k = [state.matchDate, state.team, state.opponent].join('|').toLowerCase();
+    return lookup[k] || null;
+  }
+
+  function existingReportNotice() {
+    var found = alreadyFiled();
+    var box = $('mr-filed');
+    if (!found) { box.hidden = true; return; }
+
+    var who = found.captain ? readableName(found.captain) : 'someone';
+    var when = found.submittedAt ? ' on ' + shortStamp(found.submittedAt) : '';
+    box.hidden = false;
+    box.textContent = 'A report for this match was already filed by ' + who + when +
+      (found.result ? ' (' + found.result + ')' : '') +
+      '. Sending this one will replace it on the website.';
+  }
+
+  function readableName(name) {
+    var parts = String(name).split(',');
+    if (parts.length !== 2) return String(name).trim();
+    return parts[1].trim() + ' ' + parts[0].trim();
+  }
+
+  function shortStamp(raw) {
+    var d = new Date(raw);
+    if (isNaN(d.getTime())) return '';
+    var names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return d.getDate() + ' ' + names[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  function applyFixture() {
+    var manual = $('mr-manual');
+    if (!state.fixtureKey || state.fixtureKey === 'other') {
+      manual.hidden = false;
+      existingReportNotice();
+      return;
+    }
+    var match = fixturesFor(state.team).filter(function (f) {
+      return fixtureKeyOf(f) === state.fixtureKey;
+    })[0];
+    if (!match) { state.fixtureKey = ''; manual.hidden = false; return; }
+
+    state.opponent = match.opponent;
+    state.matchDate = match.date;
+    state.homeAway = match.homeAway;
+    state.competition = match.competition;
+    $('mr-opponent').value = match.opponent;
+    $('mr-date').value = match.date;
+    setVenue(match.homeAway);
+    /* Only fold the manual fields away if the fixture actually filled them all in. */
+    manual.hidden = !!(match.opponent && match.date && match.homeAway);
+    renderScore();
+    existingReportNotice();
+  }
+
+  function totalGoals() {
+    var fromPlayers = selectedNames().reduce(function (sum, n) {
+      return sum + (state.players[n].goals || 0);
+    }, 0);
+    return fromPlayers + (state.ownGoals || 0);
+  }
+
+  function scorerNames() {
+    return selectedNames().filter(function (n) { return (state.players[n].goals || 0) > 0; });
+  }
+
+  function alertBox(message, actionLabel) {
+    var existing = document.querySelector('.mr-alert');
+    if (existing) existing.remove();
+    if (!message) return;
+    var panel = document.querySelector('.mr-panel.is-active');
+    if (!panel) return;
+    var p = document.createElement('div');
+    p.className = 'mr-alert';
+    p.setAttribute('role', 'status');
+    var text = document.createElement('span');
+    text.textContent = message;
+    p.appendChild(text);
+    if (actionLabel) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mr-alert-go';
+      b.id = 'mr-override';
+      b.textContent = actionLabel;
+      p.appendChild(b);
+    }
+    panel.insertBefore(p, panel.firstChild);
+  }
+
+  /* ---------------- step 1 ---------------- */
+
+  function buildTeams() {
+    var wrap = $('mr-teams');
+    var teams = TEAM_ORDER.filter(function (t) { return SQUADS && SQUADS[t]; });
+    if (!teams.length) teams = Object.keys(SQUADS || {});
+    wrap.innerHTML = '';
+    teams.forEach(function (team) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mr-choice';
+      b.setAttribute('data-team', team);
+      b.setAttribute('aria-pressed', String(state.team === team));
+      b.textContent = team;
+      wrap.appendChild(b);
+    });
+  }
+
+  function setTeam(team) {
+    if (state.team && state.team !== team && selectedNames().length) {
+      var ok = confirm('Switching to ' + team + ' clears the ' + state.team + ' teamsheet. Carry on?');
+      if (!ok) return;
+      state.players = {};
+      state.order = [];
+    }
+    state.team = team;
+    state.fixtureKey = '';
+    Array.prototype.forEach.call($('mr-teams').children, function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-team') === team));
+    });
+    buildFixtures();
+    buildSquad();
+    saveDraft();
+  }
+
+  function setVenue(v) {
+    state.homeAway = v;
+    Array.prototype.forEach.call($('mr-venue').children, function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-venue') === v));
+    });
+    saveDraft();
+  }
+
+  function bumpScore(which, dir) {
+    var key = which === 'for' ? 'scoreFor' : 'scoreAgainst';
+    state[key] = Math.max(0, Math.min(30, state[key] + dir));
+    renderScore();
+    saveDraft();
+  }
+
+  function renderScore() {
+    $('mr-score-for').textContent = state.scoreFor;
+    $('mr-score-against').textContent = state.scoreAgainst;
+    $('mr-them-label').textContent = state.opponent ? state.opponent : 'Opponent';
+  }
+
+  /* ---------------- step 2 ---------------- */
+
+  function buildSquad() {
+    var list = $('mr-squad');
+    list.innerHTML = '';
+    if (!state.team) return;
+
+    squadFor(state.team).forEach(function (name) {
+      list.appendChild(playerRow(name));
+    });
+
+    filterSquad();
+    renderSheet();
+  }
+
+  function playerRow(name) {
+    var p = state.players[name];
+    var on = !!p;
+
+    var li = document.createElement('li');
+    li.className = 'mr-player' + (on ? ' is-on' : '') +
+      (on && (p.booked || p.sentOff) ? ' is-carded' : '');
+    li.setAttribute('data-name', name);
+
+    var pick = document.createElement('button');
+    pick.type = 'button';
+    pick.className = 'mr-pick';
+    pick.setAttribute('data-pick', name);
+    pick.setAttribute('aria-pressed', String(on));
+    var tick = document.createElement('span');
+    tick.className = 'mr-tick';
+    tick.setAttribute('aria-hidden', 'true');
+    tick.textContent = '\u2713';
+    var label = document.createElement('span');
+    label.textContent = name;
+    pick.appendChild(tick);
+    pick.appendChild(label);
+    li.appendChild(pick);
+
+    var marks = document.createElement('div');
+    marks.className = 'mr-marks';
+
+    marks.appendChild(segment(name, 'role', 'Started or came off the bench',
+      [['start', 'Start'], ['bench', 'Bench']], on ? (p.role || 'start') : 'start'));
+
+    marks.appendChild(segment(name, 'payment', 'How subs were paid',
+      [['Paid', 'Paid'], ['Transfer', 'Transfer']], on ? (p.payment || '') : ''));
+
+    marks.appendChild(segment(name, 'position', 'Position',
+      [['GK', 'GK'], ['DEF', 'DEF'], ['MID', 'MID'], ['FWD', 'FWD']],
+      on ? (p.position || '') : ''));
+
+    [['booked', 'Booked'], ['sentOff', 'Sent off']].forEach(function (pair) {
+      var m = document.createElement('button');
+      m.type = 'button';
+      m.className = 'mr-mark';
+      m.setAttribute('data-mark', pair[0]);
+      m.setAttribute('data-for', name);
+      m.setAttribute('aria-pressed', String(on && !!p[pair[0]]));
+      m.textContent = pair[1];
+      marks.appendChild(m);
+    });
+
+    li.appendChild(marks);
+
+    var note = document.createElement('input');
+    note.type = 'text';
+    note.className = 'mr-cardnote';
+    note.setAttribute('data-note', name);
+    note.setAttribute('aria-label', 'What was the card for: ' + name);
+    note.placeholder = 'What was it for? e.g. dissent, 70 mins';
+    note.value = on ? (p.cardNote || '') : '';
+    li.appendChild(note);
+
+    return li;
+  }
+
+  // A two-button control. Role is always one or the other; payment can be
+  // neither, so tapping the selected option turns it back off.
+  function segment(name, kind, label, options, current) {
+    var seg = document.createElement('div');
+    seg.className = 'mr-seg';
+    seg.setAttribute('role', 'group');
+    seg.setAttribute('aria-label', label + ': ' + name);
+    options.forEach(function (pair) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mr-' + kind;
+      b.setAttribute('data-' + kind, pair[0]);
+      b.setAttribute('data-for', name);
+      b.setAttribute('aria-pressed', String(current === pair[0]));
+      b.textContent = pair[1];
+      seg.appendChild(b);
+    });
+    return seg;
+  }
+
+  function redrawPlayer(name) {
+    var old = document.querySelector('.mr-player[data-name="' + cssEscape(name) + '"]');
+    if (!old) return;
+    var fresh = playerRow(name);
+    old.parentNode.replaceChild(fresh, old);
+    filterSquad();
+  }
+
+  function togglePlayer(name) {
+    if (state.players[name]) {
+      delete state.players[name];
+      state.order = state.order.filter(function (n) { return n !== name; });
+    } else {
+      state.players[name] = {
+        role: 'start', payment: '', subsPaid: false,
+        position: knownPosition(name),
+        booked: false, sentOff: false, cardNote: '', goals: 0
+      };
+      state.order.push(name);
+    }
+    redrawPlayer(name);
+    renderSheet();
+    saveDraft();
+  }
+
+  function toggleMark(name, mark, btn) {
+    if (!state.players[name]) return;
+    state.players[name][mark] = !state.players[name][mark];
+    btn.setAttribute('aria-pressed', String(state.players[name][mark]));
+
+    var li = btn.closest('.mr-player');
+    var carded = state.players[name].booked || state.players[name].sentOff;
+    if (li) li.classList.toggle('is-carded', carded);
+    if (!carded) state.players[name].cardNote = '';
+
+    if (carded && li) {
+      var note = li.querySelector('.mr-cardnote');
+      if (note) note.focus();
+    }
+
+    renderSheet();
+    saveDraft();
+  }
+
+  function cssEscape(value) {
+    return String(value).replace(/["\\]/g, '\\$&');
+  }
+
+  function setRole(name, role, btn) {
+    if (!state.players[name]) return;
+    state.players[name].role = role;
+    pressOne(btn.parentNode, 'role', role);
+    renderSheet();
+    saveDraft();
+  }
+
+  function setPayment(name, how, btn) {
+    if (!state.players[name]) return;
+    var next = state.players[name].payment === how ? '' : how;
+    state.players[name].payment = next;
+    state.players[name].subsPaid = next !== '';
+    pressOne(btn.parentNode, 'payment', next);
+    renderSheet();
+    saveDraft();
+  }
+
+  function pressOne(seg, kind, value) {
+    Array.prototype.forEach.call(seg.children, function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-' + kind) === value));
+    });
+  }
+
+  // Only one keeper. Naming another moves the gloves rather than adding a second.
+  function setPosition(name, pos, btn) {
+    if (!state.players[name]) return;
+    var next = state.players[name].position === pos ? '' : pos;
+
+    if (next === 'GK') {
+      selectedNames().forEach(function (n) {
+        if (n !== name && state.players[n].position === 'GK') {
+          state.players[n].position = '';
+          var seg = document.querySelector('.mr-player[data-name="' + cssEscape(n) + '"] .mr-seg[aria-label^="Position"]');
+          if (seg) pressOne(seg, 'position', '');
+        }
+      });
+    }
+
+    state.players[name].position = next;
+    pressOne(btn.parentNode, 'position', next);
+    renderSheet();
+    saveDraft();
+  }
+
+  function setCardNote(name, text) {
+    if (!state.players[name]) return;
+    state.players[name].cardNote = text;
+    saveDraft();
+  }
+
+  function fillSheet(ol, names, startAt) {
+    ol.innerHTML = '';
+    names.forEach(function (name, i) {
+      var p = state.players[name];
+      var marks = [];
+      if (p.position) marks.push(p.position);
+      if (p.payment === 'Transfer') marks.push('transfer');
+      else if (p.subsPaid) marks.push('paid');
+      if (p.booked) marks.push('booked');
+      if (p.sentOff) marks.push('sent off');
+      var li = document.createElement('li');
+      var num = document.createElement('span');
+      num.className = 'num';
+      num.textContent = startAt + i;
+      var who = document.createElement('span');
+      who.textContent = name;
+      li.appendChild(num);
+      li.appendChild(who);
+      if (marks.length) {
+        var m = document.createElement('span');
+        m.className = 'marks';
+        m.textContent = marks.join(' · ');
+        li.appendChild(m);
+      }
+      ol.appendChild(li);
+    });
+  }
+
+  function renderSheet() {
+    var starts = startersOf();
+    var bench = benchOf();
+    var names = selectedNames();
+
+    fillSheet($('mr-sheet-list'), starts, 1);
+    fillSheet($('mr-sheet-bench'), bench, starts.length + 1);
+
+    $('mr-sheet-starts').hidden = starts.length === 0;
+    $('mr-sheet-bench-wrap').hidden = bench.length === 0;
+    $('mr-sheet-empty').hidden = names.length > 0;
+
+    var warn = $('mr-sheet-warn');
+    if (starts.length > 11) {
+      warn.hidden = false;
+      warn.textContent = starts.length + ' players marked as starting. If some came on later, tap Bench next to their name.';
+    } else {
+      warn.hidden = true;
+    }
+
+    var paid = names.filter(function (n) { return state.players[n].subsPaid; }).length;
+    $('mr-count').textContent = names.length
+      ? starts.length + ' starting · ' + bench.length + ' bench · ' + paid + ' paid'
+      : 'Nobody named yet';
+  }
+
+  function filterSquad() {
+    var q = ($('mr-search').value || '').trim().toLowerCase();
+    var shown = 0;
+    Array.prototype.forEach.call($('mr-squad').children, function (li) {
+      var hit = !q || li.getAttribute('data-name').toLowerCase().indexOf(q) !== -1;
+      li.classList.toggle('is-hidden', !hit);
+      if (hit) shown++;
+    });
+    $('mr-no-match').hidden = shown > 0;
+  }
+
+  function addGuest() {
+    var input = $('mr-guest');
+    var name = (input.value || '').trim().replace(/\s+/g, ' ');
+    if (!name) return;
+    if (state.guests.indexOf(name) === -1 &&
+        (!SQUADS[state.team] || SQUADS[state.team].indexOf(name) === -1)) {
+      state.guests.push(name);
+    }
+    if (!state.players[name]) {
+      state.players[name] = {
+        role: 'start', payment: '', subsPaid: false,
+        position: knownPosition(name),
+        booked: false, sentOff: false, cardNote: '', goals: 0
+      };
+      state.order.push(name);
+    }
+    input.value = '';
+    $('mr-search').value = '';
+    buildSquad();
+    saveDraft();
+    var li = document.querySelector('.mr-player[data-name="' + cssEscape(name) + '"]');
+    if (li && li.scrollIntoView) li.scrollIntoView({ block: 'center' });
+  }
+
+  /* ---------------- step 3 ---------------- */
+
+  var OWN_GOAL = '__own__';
+  var MIN_STARTERS = 11;
+  var POSITION_ORDER = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
+
+  // A player's usual position, remembered from previous reports.
+  function knownPosition(name) {
+    var lookup = (typeof POSITIONS === 'object' && POSITIONS) || {};
+    return lookup[(state.team + '|' + name).toLowerCase()] || '';
+  }
+
+  function buildGoals() {
+    var wrap = $('mr-goals');
+    wrap.innerHTML = '';
+
+    var scorers = scorerNames();
+    if (!scorers.length && !state.ownGoals) {
+      var none = document.createElement('p');
+      none.className = 'mr-goals-empty';
+      none.textContent = state.scoreFor
+        ? 'Nobody added yet — pick a scorer below.'
+        : 'Nothing to add for a goalless game.';
+      wrap.appendChild(none);
+    }
+
+    scorers.forEach(function (name) {
+      wrap.appendChild(goalRow(name, name, state.players[name].goals, false));
+    });
+
+    if (state.ownGoals > 0) {
+      wrap.appendChild(goalRow(OWN_GOAL, 'Own goal (opposition)', state.ownGoals, true));
+    }
+
+    buildScorerPicker();
+    renderTally();
+  }
+
+  function goalRow(key, label, goals, isOwn) {
+    var row = document.createElement('div');
+    row.className = 'mr-goal-row';
+    row.setAttribute('data-name', key);
+    row.setAttribute('data-scored', 'yes');
+    if (isOwn) row.setAttribute('data-own', 'yes');
+
+    var who = document.createElement('span');
+    who.className = 'who';
+    who.textContent = label;
+
+    var minus = stepButton(key, -1, 'One fewer for ' + label);
+    minus.disabled = goals <= 1;
+
+    var val = document.createElement('span');
+    val.className = 'mr-step-val';
+    val.setAttribute('data-goalval', key);
+    val.setAttribute('aria-live', 'polite');
+    val.textContent = goals;
+
+    var plus = stepButton(key, 1, 'One more for ' + label);
+
+    var remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'mr-remove';
+    remove.setAttribute('data-remove', key);
+    remove.setAttribute('aria-label', 'Remove ' + label + ' from the scorers');
+    remove.textContent = '\u00d7';
+
+    row.appendChild(who);
+    row.appendChild(minus);
+    row.appendChild(val);
+    row.appendChild(plus);
+    row.appendChild(remove);
+    return row;
+  }
+
+  function stepButton(key, dir, label) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'mr-step-btn';
+    b.setAttribute('data-goal', key);
+    b.setAttribute('data-dir', String(dir));
+    b.setAttribute('aria-label', label);
+    b.textContent = dir < 0 ? '\u2212' : '+';
+    return b;
+  }
+
+  function buildScorerPicker() {
+    var sel = $('mr-add-scorer');
+    var already = {};
+    scorerNames().forEach(function (n) { already[n] = true; });
+
+    sel.innerHTML = '';
+    var head = document.createElement('option');
+    head.value = '';
+    head.textContent = 'Add a scorer\u2026';
+    sel.appendChild(head);
+
+    var remaining = selectedNames().filter(function (n) { return !already[n]; });
+    if (remaining.length) {
+      var group = document.createElement('optgroup');
+      group.label = 'Squad';
+      remaining.forEach(function (name) {
+        var o = document.createElement('option');
+        o.value = name;
+        o.textContent = name;
+        group.appendChild(o);
+      });
+      sel.appendChild(group);
+    }
+
+    if (!state.ownGoals) {
+      var og = document.createElement('option');
+      og.value = OWN_GOAL;
+      og.textContent = 'Own goal (opposition)';
+      sel.appendChild(og);
+    }
+
+    sel.value = '';
+    sel.disabled = remaining.length === 0 && !!state.ownGoals;
+  }
+
+  function addScorer(key) {
+    if (!key) return;
+    if (key === OWN_GOAL) {
+      state.ownGoals = (state.ownGoals || 0) + 1;
+    } else if (state.players[key]) {
+      state.players[key].goals = (state.players[key].goals || 0) + 1;
+    }
+    buildGoals();
+    saveDraft();
+  }
+
+  function bumpGoal(key, dir) {
+    if (key === OWN_GOAL) {
+      state.ownGoals = Math.max(0, Math.min(20, (state.ownGoals || 0) + dir));
+    } else {
+      if (!state.players[key]) return;
+      state.players[key].goals = Math.max(0, Math.min(20, (state.players[key].goals || 0) + dir));
+    }
+    buildGoals();
+    saveDraft();
+  }
+
+  function removeScorer(key) {
+    if (key === OWN_GOAL) state.ownGoals = 0;
+    else if (state.players[key]) state.players[key].goals = 0;
+    buildGoals();
+    saveDraft();
+  }
+
+  function renderTally() {
+    var scored = totalGoals();
+    var el = $('mr-tally');
+    if (scored === state.scoreFor) {
+      el.setAttribute('data-match', 'yes');
+      el.textContent = scored + ' of ' + state.scoreFor + ' goals accounted for.';
+    } else if (scored < state.scoreFor) {
+      el.setAttribute('data-match', 'no');
+      var short = state.scoreFor - scored;
+      el.textContent = scored + ' of ' + state.scoreFor + ' accounted for — ' + short +
+        ' still to add.';
+    } else {
+      el.setAttribute('data-match', 'no');
+      el.textContent = scored + ' goals assigned but the score says ' + state.scoreFor +
+        '. Check the score on the previous step.';
+    }
+  }
+
+  function renderReview() {
+    var names = selectedNames();
+    var paid = names.filter(function (n) { return state.players[n].subsPaid; }).length;
+    var rows = [
+      ['Team', state.team || '—'],
+      ['Opponent', (state.opponent || '—') + (state.homeAway ? ' (' + state.homeAway.toLowerCase() + ')' : '')],
+      ['Date', prettyDate(state.matchDate) || '—'],
+      ['Score', state.scoreFor + '–' + state.scoreAgainst],
+      ['Starting', startersOf().length],
+      ['Bench', benchOf().length],
+      ['Subs paid', paid + ' of ' + names.length]
+    ];
+    var replacing = alreadyFiled();
+    var warn = $('mr-replacing');
+    warn.hidden = !replacing;
+    if (replacing) {
+      warn.textContent = 'This replaces the report filed by ' +
+        (replacing.captain ? readableName(replacing.captain) : 'someone') +
+        (replacing.result ? ' (' + replacing.result + ')' : '') + '.';
+    }
+
+    var dl = $('mr-review');
+    dl.innerHTML = '';
+    rows.forEach(function (r) {
+      var dt = document.createElement('dt');
+      dt.textContent = r[0];
+      var dd = document.createElement('dd');
+      dd.textContent = r[1];
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    });
+  }
+
+  /* ---------------- steps ---------------- */
+
+  function problemsOnStep(step) {
+    if (step === 1) {
+      if (!state.team) return ['Pick a team first.', 'mr-teams'];
+      if (!$('mr-captain').value.trim()) return ['Add your name.', 'mr-captain'];
+      if (!$('mr-opponent').value.trim()) return ['Add who you played.', 'mr-opponent'];
+      if (!state.homeAway) return ['Say whether it was home or away.', 'mr-venue'];
+      if (!$('mr-date').value) return ['Add the match date.', 'mr-date'];
+    }
+    if (step === 2) {
+      var starts = startersOf().length;
+      if (!selectedNames().length) return ['Name at least one player.', 'mr-squad'];
+      if (starts > MIN_STARTERS) {
+        return [starts + ' players are marked as starting. Only ' + MIN_STARTERS +
+                ' can start — tap Bench for the ones who came on.', 'mr-squad'];
+      }
+      if (starts === MIN_STARTERS && !startersOf().some(function (n) {
+            return state.players[n].position === 'GK';
+          }) && !state.noKeeper) {
+        return ['Nobody is marked GK. Tap GK next to whoever went in goal.',
+                'mr-squad', 'We had no keeper'];
+      }
+      if (starts < MIN_STARTERS && !state.shortSide) {
+        return ['Only ' + starts + ' marked as starting, out of ' + MIN_STARTERS + '.',
+                'mr-squad', 'We played with ' + starts];
+      }
+    }
+    return null;
+  }
+
+  function goTo(step) {
+    state.step = step;
+    Array.prototype.forEach.call(document.querySelectorAll('.mr-panel'), function (p) {
+      p.classList.toggle('is-active', p.getAttribute('data-panel') === String(step));
+    });
+    Array.prototype.forEach.call($('mr-rail').children, function (li, i) {
+      var n = i + 1;
+      li.setAttribute('data-state', n === step ? 'now' : (n < step ? 'done' : ''));
+    });
+    $('mr-rail').hidden = step === 4;
+    $('mr-back').hidden = step === 1 || step === 4;
+    $('mr-next').hidden = step === 4;
+    $('mr-next').textContent = step === 3
+      ? (alreadyFiled() ? 'Replace report' : 'Send report')
+      : 'Next';
+    alertBox('');
+
+    if (step === 2) buildSquad();
+    if (step === 3) {
+      buildGoals();
+      renderReview();
+    }
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    if (step !== 4) saveDraft();
+  }
+
+  /* ---------------- sending ---------------- */
+
+  function buildPayload() {
+    return {
+      secret: SHARED_SECRET,
+      source: 'website',
+      // Where this form was served from. Used for one thing only: so a report
+      // filed while developing on localhost doesn't rebuild the live site.
+      origin: window.location.hostname,
+      reportId: state.reportId,
+      submittedAt: new Date().toISOString(),
+      captain: state.captain,
+      team: state.team,
+      opponent: state.opponent,
+      homeAway: state.homeAway,
+      matchDate: state.matchDate,
+      competition: state.competition,
+      scoreFor: state.scoreFor,
+      scoreAgainst: state.scoreAgainst,
+      players: selectedNames().map(function (name) {
+        var p = state.players[name];
+        return {
+          name: name,
+          played: true,
+          role: p.role === 'bench' ? 'Sub' : 'Start',
+          position: p.position || '',
+          subsPaid: !!p.subsPaid,
+          payment: p.payment || '',
+          booked: !!p.booked,
+          sentOff: !!p.sentOff,
+          cardNote: p.cardNote || '',
+          goals: p.goals || 0
+        };
+      }),
+      ownGoals: state.ownGoals || 0,
+      positionUpdates: changedPositions(),
+      newPlayers: state.guests.slice(),
+      notes: state.notes
+    };
+  }
+
+  // Only the positions that differ from what the roster already knows, so the
+  // spreadsheet learns each player's position once rather than every week.
+  function changedPositions() {
+    var out = {};
+    selectedNames().forEach(function (name) {
+      var pos = state.players[name].position || '';
+      if (pos && pos !== knownPosition(name)) out[name] = pos;
+    });
+    return out;
+  }
+
+  function post(payload) {
+    /* text/plain keeps the browser from sending a CORS preflight, which
+       Apps Script web apps do not answer. The script reads e.postData.contents. */
+    return fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+  }
+
+  function queue(payload) {
+    try {
+      var q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+      q.push(payload);
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+      return true;
+    } catch (err) { return false; }
+  }
+
+  function flushQueue() {
+    var q;
+    try { q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch (err) { return; }
+    if (!q.length) return;
+    var remaining = [];
+    var pending = q.map(function (payload) {
+      return post(payload).catch(function () { remaining.push(payload); });
+    });
+    Promise.all(pending).then(function () {
+      try { localStorage.setItem(QUEUE_KEY, JSON.stringify(remaining)); } catch (err) {}
+    });
+  }
+
+  function send() {
+    if (sending) return;
+    sending = true;
+    var btn = $('mr-next');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    var payload = buildPayload();
+
+    post(payload).then(function () {
+      clearDraft();
+      $('mr-done-head').textContent = 'Report sent';
+      $('mr-done-body').textContent = 'Thanks — it is in the spreadsheet.';
+      goTo(4);
+    }).catch(function () {
+      var held = queue(payload);
+      clearDraft();
+      $('mr-done-head').textContent = held ? 'Saved — will send itself' : 'Could not send';
+      $('mr-done-body').textContent = held
+        ? 'No connection right now. The report is saved on this phone and sends on its own next time you open this page with signal.'
+        : 'The report could not be sent and could not be saved. Please try again on a better connection.';
+      goTo(4);
+    }).then(function () {
+      sending = false;
+      btn.disabled = false;
+      btn.textContent = 'Send report';
+    });
+  }
+
+  function reset() {
+    state.step = 1;
+    state.reportId = newId();
+    state.opponent = '';
+    state.homeAway = '';
+    state.fixtureKey = '';
+    state.competition = '';
+    state.confirmedReplace = false;
+    state.matchDate = new Date().toISOString().slice(0, 10);
+    state.scoreFor = 0;
+    state.scoreAgainst = 0;
+    state.players = {};
+    state.order = [];
+    state.ownGoals = 0;
+    state.shortSide = false;
+    state.notes = '';
+    $('mr-opponent').value = '';
+    $('mr-date').value = state.matchDate;
+    $('mr-notes').value = '';
+    $('mr-search').value = '';
+    setVenue('');
+    buildFixtures();
+    renderScore();
+    buildSquad();
+    goTo(1);
+  }
+
+  /* ---------------- wiring ---------------- */
+
+  function init() {
+    var hadDraft = loadDraft();
+
+    buildTeams();
+    $('mr-captain').value = state.captain;
+    $('mr-opponent').value = state.opponent;
+    $('mr-date').value = state.matchDate;
+    $('mr-notes').value = state.notes;
+    if (state.homeAway) setVenue(state.homeAway);
+    buildFixtures();
+    renderScore();
+    buildSquad();
+
+    $('mr-teams').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-team]');
+      if (b) setTeam(b.getAttribute('data-team'));
+    });
+
+    $('mr-fixture').addEventListener('change', function () {
+      state.fixtureKey = this.value;
+      state.confirmedReplace = false;
+      applyFixture();
+      saveDraft();
+    });
+
+    $('mr-venue').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-venue]');
+      if (b) setVenue(b.getAttribute('data-venue'));
+    });
+
+    document.querySelector('.mr-score').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-score]');
+      if (b) bumpScore(b.getAttribute('data-score'), Number(b.getAttribute('data-dir')));
+    });
+
+    $('mr-squad').addEventListener('click', function (e) {
+      var role = e.target.closest('[data-role]');
+      if (role) { setRole(role.getAttribute('data-for'), role.getAttribute('data-role'), role); return; }
+      var pos = e.target.closest('[data-position]');
+      if (pos) { setPosition(pos.getAttribute('data-for'), pos.getAttribute('data-position'), pos); return; }
+      var pay = e.target.closest('[data-payment]');
+      if (pay) { setPayment(pay.getAttribute('data-for'), pay.getAttribute('data-payment'), pay); return; }
+      var mark = e.target.closest('[data-mark]');
+      if (mark) { toggleMark(mark.getAttribute('data-for'), mark.getAttribute('data-mark'), mark); return; }
+      var pick = e.target.closest('[data-pick]');
+      if (pick) togglePlayer(pick.getAttribute('data-pick'));
+    });
+
+    $('mr-goals').addEventListener('click', function (e) {
+      var rm = e.target.closest('[data-remove]');
+      if (rm) { removeScorer(rm.getAttribute('data-remove')); return; }
+      var b = e.target.closest('[data-goal]');
+      if (b) bumpGoal(b.getAttribute('data-goal'), Number(b.getAttribute('data-dir')));
+    });
+
+    $('mr-add-scorer').addEventListener('change', function () {
+      addScorer(this.value);
+    });
+
+    $('mr-squad').addEventListener('input', function (e) {
+      var note = e.target.closest('[data-note]');
+      if (note) setCardNote(note.getAttribute('data-note'), note.value);
+    });
+
+    $('mr-search').addEventListener('input', filterSquad);
+    $('mr-guest-add').addEventListener('click', addGuest);
+    $('mr-guest').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); addGuest(); }
+    });
+
+    [['mr-captain', 'captain'], ['mr-opponent', 'opponent'], ['mr-date', 'matchDate'],
+     ['mr-notes', 'notes']].forEach(function (pair) {
+      $(pair[0]).addEventListener('input', function () {
+        state[pair[1]] = this.value;
+        if (pair[1] === 'opponent') renderScore();
+        if (pair[1] === 'opponent' || pair[1] === 'matchDate') existingReportNotice();
+        saveDraft();
+      });
+    });
+
+    $('mr-back').addEventListener('click', function () {
+      if (state.step > 1) goTo(state.step - 1);
+    });
+
+    $('mr-next').addEventListener('click', function () {
+      var problem = problemsOnStep(state.step);
+      if (problem) {
+        alertBox(problem[0], problem[2]);
+        var override = $('mr-override');
+        if (override) {
+          override.addEventListener('click', function () {
+            if (problem[2].indexOf('keeper') > -1) state.noKeeper = true;
+            else state.shortSide = true;
+            alertBox('');
+            goTo(state.step + 1);
+          });
+        }
+        var target = $(problem[1]);
+        if (target && target.scrollIntoView) target.scrollIntoView({ block: 'center' });
+        if (target && target.focus && target.tagName === 'INPUT') target.focus();
+        return;
+      }
+      if (state.step === 3) {
+        var replacing = alreadyFiled();
+        if (replacing && !state.confirmedReplace) {
+          state.confirmedReplace = true;
+          alertBox('This match already has a report. Tap "Replace report" again ' +
+                   'to overwrite it, or go back and change the match.');
+          return;
+        }
+        send();
+      } else {
+        goTo(state.step + 1);
+      }
+    });
+
+    $('mr-again').addEventListener('click', reset);
+
+    window.addEventListener('online', flushQueue);
+    flushQueue();
+
+    goTo(state.step);
+
+    if (hadDraft && (state.opponent || selectedNames().length)) {
+      alertBox('Picked up where you left off. Tap "File another report" at the end if you wanted a fresh one.');
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+</script>
+
+<style is:global>
+  /* Everything is prefixed .mr so it can be global without leaking.
+     Global (not scoped) because rows are created by JavaScript, and
+     Astro's scoped styles only reach elements that exist at build time. */
+
+  .mr {
+    --navy: #0f172a;
+    --blue: #2323e0;
+    --ink: #1e293b;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --paper: #fbfaf7;
+    --paid: #047857;
+    --booked: #b45309;
+    --sent: #b91c1c;
+    --tap: 52px;
+    max-width: 620px;
+    margin: 0 auto;
+    padding: 0 0 7rem;
+  }
+
+  .mr *:focus-visible {
+    outline: 3px solid var(--blue);
+    outline-offset: 2px;
+  }
+
+  /* ---------- Header + step rail ---------- */
+
+  .mr-head { padding: 0.5rem 0 1.25rem; }
+
+  .mr-eyebrow {
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin: 0 0 0.3rem;
+  }
+
+  .mr-head h1 {
+    font-size: 1.9rem;
+    line-height: 1.1;
+    margin: 0 0 1rem;
+    letter-spacing: -0.02em;
+  }
+
+  .mr-rail {
+    display: flex;
+    gap: 0.4rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .mr-rail li {
+    flex: 1;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-top: 0.45rem;
+    border-top: 3px solid var(--line);
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  .mr-rail li[data-state='done'] { border-top-color: #a5b4fc; color: var(--muted); }
+  .mr-rail li[data-state='now']  { border-top-color: var(--blue); color: var(--navy); }
+
+  /* ---------- Panels ---------- */
+
+  .mr-panel { display: none; }
+  .mr-panel.is-active { display: block; animation: mr-in 0.22s ease-out; }
+
+  @keyframes mr-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .mr-field { margin: 0 0 1.35rem; }
+
+  .mr-label {
+    display: block;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--navy);
+    margin: 0 0 0.45rem;
+  }
+
+  .mr-hint {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin: 0.35rem 0 0;
+    line-height: 1.45;
+  }
+
+  .mr input[type='text'],
+  .mr input[type='date'],
+  .mr textarea {
+    width: 100%;
+    min-height: var(--tap);
+    padding: 0.75rem 0.9rem;
+    font-family: var(--font-body);
+    font-size: 1rem; /* 16px minimum stops iOS zooming on focus */
+    color: var(--ink);
+    background: #fff;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .mr textarea { min-height: 92px; resize: vertical; line-height: 1.5; }
+
+  .mr input:focus, .mr textarea:focus { border-color: var(--blue); }
+
+  /* ---------- Team + segmented choices ---------- */
+
+  .mr-choices { display: grid; gap: 0.5rem; }
+  .mr-choices.is-pair { grid-template-columns: 1fr 1fr; }
+
+  .mr-choice {
+    min-height: var(--tap);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.6rem 0.9rem;
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--navy);
+    background: #fff;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: center;
+  }
+
+  .mr-choice[aria-pressed='true'] {
+    background: var(--navy);
+    border-color: var(--navy);
+    color: #fff;
+  }
+
+  /* ---------- Score steppers ---------- */
+
+  .mr-score {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .mr-scorebox {
+    border: 1.5px solid var(--line);
+    border-radius: 12px;
+    padding: 0.6rem;
+    text-align: center;
+    background: #fff;
+  }
+
+  .mr-scorebox h3 {
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 0.35rem;
+    min-height: 1.2em;
+  }
+
+  .mr-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.3rem;
+  }
+
+  .mr-step-btn {
+    width: 46px;
+    height: 46px;
+    flex: 0 0 auto;
+    font-size: 1.5rem;
+    line-height: 1;
+    font-family: var(--font-body);
+    color: var(--navy);
+    background: #f1f5f9;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+
+  .mr-step-btn:active { background: #e2e8f0; }
+  .mr-step-btn[disabled] { opacity: 0.35; cursor: default; }
+
+  .mr-step-val {
+    font-family: var(--font-heading);
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--navy);
+    min-width: 1.6ch;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- The teamsheet (signature element) ---------- */
+
+  .mr-sheet {
+    background: var(--paper);
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 43px,
+      #e7e3d8 43px,
+      #e7e3d8 44px
+    );
+    border: 1.5px solid #ded9cc;
+    border-radius: 12px;
+    padding: 0.9rem 1rem 1rem;
+    margin: 0 0 1.25rem;
+  }
+
+  .mr-sheet-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0 0 0.4rem;
+  }
+
+  .mr-sheet-head h2 {
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #8a8272;
+    margin: 0;
+  }
+
+  .mr-count {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--navy);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mr-sheet ol { list-style: none; margin: 0; padding: 0; }
+
+  .mr-sheet li {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    height: 44px;
+    font-size: 0.95rem;
+    color: var(--navy);
+  }
+
+  .mr-sheet li .num {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: #a8a08c;
+    min-width: 1.6ch;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mr-sheet li .marks {
+    margin-left: auto;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .mr-sheet-empty {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+    color: #a8a08c;
+  }
+
+  /* ---------- Squad picker ---------- */
+
+  .mr-search-wrap {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #fff;
+    padding: 0.5rem 0 0.6rem;
+    margin: 0 0 0.25rem;
+  }
+
+  .mr-list { list-style: none; margin: 0; padding: 0; }
+
+  .mr-player {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mr-player.is-hidden { display: none; }
+
+  .mr-pick {
+    width: 100%;
+    min-height: var(--tap);
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.55rem 0.2rem;
+    background: none;
+    border: none;
+    font-family: var(--font-body);
+    font-size: 1rem;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .mr-tick {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    font-size: 0.9rem;
+    line-height: 1;
+  }
+
+  .mr-player.is-on .mr-tick {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: #fff;
+  }
+
+  .mr-player.is-on .mr-pick { font-weight: 600; color: var(--navy); }
+
+  .mr-marks {
+    display: none;
+    gap: 0.4rem;
+    padding: 0 0 0.6rem 2.15rem;
+    flex-wrap: wrap;
+  }
+
+  .mr-player.is-on .mr-marks { display: flex; }
+
+  .mr-mark {
+    min-height: 38px;
+    padding: 0.3rem 0.7rem;
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--muted);
+    background: #fff;
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .mr-mark[data-mark='subsPaid'][aria-pressed='true'] { color: #fff; background: var(--paid); border-color: var(--paid); }
+  .mr-mark[data-mark='booked'][aria-pressed='true']   { color: #fff; background: var(--booked); border-color: var(--booked); }
+  .mr-mark[data-mark='sentOff'][aria-pressed='true']  { color: #fff; background: var(--sent); border-color: var(--sent); }
+
+  .mr-none {
+    padding: 1.5rem 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  /* ---------- Goals ---------- */
+
+  .mr-goal-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mr-goal-row .who {
+    flex: 1 1 auto;
+    font-size: 0.95rem;
+    color: var(--navy);
+  }
+
+  .mr-goal-row .mr-step-btn { width: 42px; height: 42px; font-size: 1.3rem; }
+
+  .mr-goal-row .mr-step-val { font-size: 1.2rem; min-width: 1.4ch; }
+
+  .mr-goal-row[data-scored='yes'] .who { font-weight: 600; }
+
+  .mr-tally {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0.75rem 0 0;
+  }
+
+  .mr-tally[data-match='no'] { color: var(--booked); font-weight: 600; }
+
+  /* ---------- Review ---------- */
+
+  .mr-review {
+    border: 1.5px solid var(--line);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    margin: 0 0 1.25rem;
+  }
+
+  .mr-review dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 0.9rem; }
+  .mr-review dt { font-size: 0.8rem; color: var(--muted); }
+  .mr-review dd { margin: 0; font-size: 0.9rem; color: var(--navy); font-weight: 600; text-align: right; }
+
+  /* ---------- Sticky action bar ---------- */
+
+  .mr-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    display: flex;
+    gap: 0.6rem;
+    padding: 0.7rem 1.25rem calc(0.7rem + env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--line);
+  }
+
+  .mr-bar-inner {
+    max-width: 620px;
+    margin: 0 auto;
+    width: 100%;
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+  }
+
+  .mr-btn {
+    min-height: var(--tap);
+    padding: 0.75rem 1.2rem;
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 10px;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+  }
+
+  .mr-btn-primary { flex: 1 1 auto; background: var(--blue); color: #fff; }
+  .mr-btn-primary[disabled] { background: #c7d2fe; cursor: default; }
+  .mr-btn-ghost { flex: 0 0 auto; background: #fff; border-color: var(--line); color: var(--navy); }
+
+  .mr-saved {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 0.4rem 0 0;
+    min-height: 1.2em;
+  }
+
+  /* ---------- Sent / error ---------- */
+
+  .mr-done { text-align: center; padding: 2.5rem 0; }
+  .mr-done .tick { font-size: 3rem; line-height: 1; }
+  .mr-done h2 { margin: 0.75rem 0 0.4rem; }
+  .mr-done p { color: var(--muted); line-height: 1.55; }
+
+  .mr-alert {
+    background: #fef3c7;
+    border: 1.5px solid #fcd34d;
+    border-radius: 10px;
+    padding: 0.8rem 0.95rem;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: #78350f;
+    margin: 0 0 1rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mr-panel.is-active { animation: none; }
+    .mr * { transition: none !important; }
+  }
+
+  @media (min-width: 640px) {
+    .mr-head h1 { font-size: 2.4rem; }
+    .mr-choices { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* ---------- Fixture picker ---------- */
+
+  .mr select {
+    width: 100%;
+    min-height: var(--tap);
+    padding: 0.75rem 2.2rem 0.75rem 0.9rem;
+    font-family: var(--font-body);
+    font-size: 1rem;
+    color: var(--ink);
+    background-color: #fff;
+    background-image: linear-gradient(45deg, transparent 50%, var(--navy) 50%),
+                      linear-gradient(135deg, var(--navy) 50%, transparent 50%);
+    background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .mr select:focus { border-color: var(--blue); }
+
+  /* ---------- Teamsheet sections ---------- */
+
+  .mr-sheet-sub {
+    font-family: var(--font-heading);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #a8a08c;
+    margin: 0;
+    height: 22px;
+    display: flex;
+    align-items: center;
+  }
+
+  .mr-sheet-warn {
+    margin: 0.6rem 0 0;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: #8a6d1f;
+  }
+
+  /* ---------- Start / Bench segmented control ---------- */
+
+  .mr-seg {
+    display: inline-flex;
+    flex: 0 0 auto;
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .mr-seg button {
+    min-height: 38px;
+    padding: 0.3rem 0.85rem;
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  .mr-seg button + button { border-left: 1.5px solid var(--line); }
+
+  .mr-seg button[aria-pressed='true'] { background: var(--navy); color: #fff; }
+
+  /* ---------- Scorer rows ---------- */
+
+  .mr-goal-row .mr-remove {
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    font-size: 1.1rem;
+    line-height: 1;
+    color: var(--muted);
+    background: none;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .mr-goal-row .mr-remove:active { background: #f1f5f9; }
+
+  .mr-goal-row[data-own='yes'] .who { font-style: italic; color: var(--muted); }
+
+  #mr-add-scorer { margin-top: 0.75rem; }
+
+  .mr-goals-empty {
+    padding: 0.6rem 0;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  /* ---------- Card detail, shown only once a card is marked ---------- */
+
+  .mr-cardnote {
+    display: none;
+    margin: 0 0 0.7rem 2.15rem;
+    width: calc(100% - 2.15rem);
+    min-height: 44px;
+    font-size: 0.95rem;
+  }
+
+  .mr-player.is-on.is-carded .mr-cardnote { display: block; }
+
+  /* ---------- Alert with an action ---------- */
+
+  .mr-alert { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+  .mr-alert span { flex: 1 1 12rem; }
+
+  .mr-alert-go {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 0.4rem 0.9rem;
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #78350f;
+    background: #fde68a;
+    border: 1.5px solid #d9a520;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  /* ---------- "already filed" notice ---------- */
+
+  .mr-filed {
+    margin: 0 0 1.25rem;
+    padding: 0.75rem 0.95rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: #78350f;
+    background: #fef3c7;
+    border: 1.5px solid #fcd34d;
+    border-radius: 10px;
+  }
+
+  /* Position sits on its own line — four buttons need the width on a phone. */
+  .mr-seg[aria-label^='Position'] {
+    flex-basis: 100%;
+    justify-content: space-between;
+  }
+
+  .mr-seg[aria-label^='Position'] button { flex: 1 1 0; padding: 0.3rem 0.4rem; }
+
+  .mr-seg[aria-label^='Position'] button[data-position='GK'][aria-pressed='true'] {
+    background: #0f766e;
+    border-color: #0f766e;
+  }
+</style>

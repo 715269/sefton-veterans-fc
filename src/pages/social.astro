@@ -1,5 +1,8 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { Image } from 'astro:assets';
+import agmGame from '../assets/agm-game-2024.jpg';
+import squad2022 from '../assets/squad-2022.jpg';
 ---
 
 <BaseLayout title="Social">
@@ -13,14 +16,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   <section class="section-padded container">
     <h2>Club Life</h2>
     <div class="photo-grid">
-      <img
-        src="https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=700,h=500,fit=crop/dOqbneo9QpTgEjPz/agm-game-2024-YX4P7oMeOeUbVw6q.jpg"
-        alt="Sefton Veterans FC social event"
-      />
-      <img
-        src="https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=700,h=500,fit=crop/dOqbneo9QpTgEjPz/img20221029150737-1-AzGrWJDPlbu24N4r.jpg"
-        alt="Sefton Veterans FC players"
-      />
+      <Image src={agmGame} alt="Sefton Veterans FC social event" width={700} />
+      <Image src={squad2022} alt="Sefton Veterans FC players" width={700} />
     </div>
     <p><em>Placeholder — add upcoming social events and news here.</em></p>
   </section>

@@ -1,0 +1,334 @@
+---
+// src/components/SeasonRankings.astro
+//
+// Leading scorers and most appearances, split by team.
+//
+// Every team's tables are rendered into the page and the tabs just show and
+// hide them. No fetching, no framework — switching teams is instant and works
+// before any script has run, which matters on a phone on a cold connection at
+// a ground somewhere.
+//
+// The whole section disappears if no team has played yet, rather than showing
+// four empty shells. An empty table says less than nothing.
+
+import { getSeason, getStatsByTeam } from '../lib/season.js';
+import { orderTeams } from '../lib/teams.js';
+
+const TOP_N = 5;
+
+const season = await getSeason();
+const stats = await getStatsByTeam();
+const teams = orderTeams([...new Set(season.map((f) => f.team).filter(Boolean))]);
+
+const hasAnyData = teams.some((t) => (stats[t]?.appearances?.length ?? 0) > 0);
+
+// Open on a team that actually has something to show, so the first thing a
+// visitor sees isn't an empty panel.
+const defaultTeam = teams.find((t) => (stats[t]?.appearances?.length ?? 0) > 0)
+  ?? teams[0];
+
+// "Surname, Forename" is how the sheet stores names, but it reads badly in a
+// table. Flip it for display only — the stored form is untouched.
+function readable(name) {
+  const parts = String(name || '').split(',');
+  if (parts.length < 2) return String(name || '');
+  return parts[1].trim() + ' ' + parts[0].trim();
+}
+
+function position(p) {
+  return (p.joint ? '=' : '') + p.rank;
+}
+---
+
+{hasAnyData && (
+  <section class="rankings">
+    <div class="rankings-head">
+      <h2>Season so far</h2>
+    </div>
+
+    <div class="tabs" role="tablist" aria-label="Choose a team">
+      {teams.map((team) => (
+        <button
+          type="button"
+          role="tab"
+          class="tab"
+          id={'tab-' + team.replace(/\s+/g, '-').toLowerCase()}
+          aria-controls={'panel-' + team.replace(/\s+/g, '-').toLowerCase()}
+          aria-selected={team === defaultTeam ? 'true' : 'false'}
+          tabindex={team === defaultTeam ? 0 : -1}
+        >
+          {team}
+        </button>
+      ))}
+    </div>
+
+    {teams.map((team) => {
+      const s = stats[team] ?? { scorers: [], appearances: [] };
+      const slug = team.replace(/\s+/g, '-').toLowerCase();
+
+      return (
+        <div
+          class="panel"
+          role="tabpanel"
+          id={'panel-' + slug}
+          aria-labelledby={'tab-' + slug}
+          hidden={team !== defaultTeam}
+        >
+          {s.appearances.length === 0 ? (
+            <p class="empty">No matches played yet this season.</p>
+          ) : (
+            <div class="tables">
+              <div class="table-block">
+                <h3>Leading scorers</h3>
+                {s.scorers.length === 0 ? (
+                  <p class="empty">No goals recorded yet.</p>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th class="pos" scope="col"><span class="sr">Position</span></th>
+                        <th scope="col">Player</th>
+                        <th class="num" scope="col">Goals</th>
+                        <th class="num" scope="col">Apps</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {s.scorers.slice(0, TOP_N).map((p) => (
+                        <tr>
+                          <td class="pos">{position(p)}</td>
+                          <td>{readable(p.name)}</td>
+                          <td class="num strong">{p.goals}</td>
+                          <td class="num muted">{p.appearances}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {s.scorers.length > TOP_N && (
+                  <p class="more">Showing the top {TOP_N} of {s.scorers.length} scorers.</p>
+                )}
+              </div>
+
+              <div class="table-block">
+                <h3>Most appearances</h3>
+                <table>
+                  <thead>
+                    <tr>
+                      <th class="pos" scope="col"><span class="sr">Position</span></th>
+                      <th scope="col">Player</th>
+                      <th class="num" scope="col">Apps</th>
+                      <th class="num" scope="col">Start</th>
+                      <th class="num" scope="col">Sub</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {s.appearances.slice(0, TOP_N).map((p) => (
+                      <tr>
+                        <td class="pos">{position(p)}</td>
+                        <td>{readable(p.name)}</td>
+                        <td class="num strong">{p.appearances}</td>
+                        <td class="num muted">{p.starts}</td>
+                        <td class="num muted">{p.subApps}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {s.appearances.length > TOP_N && (
+                  <p class="more">Showing the top {TOP_N} of {s.appearances.length} players.</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    })}
+
+    <p class="footnote">
+      Counted from teamsheets filed this season. Matches without a report
+      submitted are not included.
+    </p>
+  </section>
+)}
+
+<script>
+  (function () {
+    var list = document.querySelector('.rankings [role="tablist"]');
+    if (!list) return;
+
+    var tabs = Array.prototype.slice.call(list.querySelectorAll('[role="tab"]'));
+
+    function select(tab) {
+      tabs.forEach(function (t) {
+        var chosen = t === tab;
+        t.setAttribute('aria-selected', chosen ? 'true' : 'false');
+        t.tabIndex = chosen ? 0 : -1;
+        var panel = document.getElementById(t.getAttribute('aria-controls'));
+        if (panel) panel.hidden = !chosen;
+      });
+    }
+
+    list.addEventListener('click', function (e) {
+      var tab = e.target.closest('[role="tab"]');
+      if (tab) select(tab);
+    });
+
+    // Left/right to move between tabs, Home/End to jump to the ends — what a
+    // keyboard user expects from a tablist.
+    list.addEventListener('keydown', function (e) {
+      var i = tabs.indexOf(document.activeElement);
+      if (i === -1) return;
+
+      var next = null;
+      if (e.key === 'ArrowRight') next = tabs[(i + 1) % tabs.length];
+      else if (e.key === 'ArrowLeft') next = tabs[(i - 1 + tabs.length) % tabs.length];
+      else if (e.key === 'Home') next = tabs[0];
+      else if (e.key === 'End') next = tabs[tabs.length - 1];
+
+      if (next) {
+        e.preventDefault();
+        select(next);
+        next.focus();
+      }
+    });
+  })();
+</script>
+
+<style>
+  .rankings-head h2 {
+    margin: 0 0 1rem;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+
+  .tab {
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 0.45rem 0.95rem;
+    border-radius: 999px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    color: #475569;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .tab:hover {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+  }
+
+  .tab[aria-selected='true'] {
+    background: var(--color-navy, #0f172a);
+    border-color: var(--color-navy, #0f172a);
+    color: white;
+  }
+
+  .tab:focus-visible {
+    outline: 3px solid var(--color-blue, #2323e0);
+    outline-offset: 2px;
+  }
+
+  .tables {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .table-block {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1rem 1.25rem 1.1rem;
+  }
+
+  .table-block h3 {
+    margin: 0 0 0.6rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+  }
+
+  th {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    text-align: left;
+    padding: 0 0 0.4rem;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  td {
+    padding: 0.42rem 0;
+    border-bottom: 1px solid #f1f5f9;
+    color: var(--color-navy, #0f172a);
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* Tabular figures so the columns line up rather than wandering. */
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    width: 3.4rem;
+  }
+
+  .pos {
+    width: 2.2rem;
+    color: #94a3b8;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .strong {
+    font-weight: 700;
+  }
+
+  .muted {
+    color: #64748b;
+  }
+
+  .empty {
+    color: #64748b;
+    font-style: italic;
+    margin: 0;
+  }
+
+  .more,
+  .footnote {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    margin: 0.6rem 0 0;
+  }
+
+  .footnote {
+    margin-top: 1rem;
+  }
+
+  /* Visible to screen readers only — the position column has no visible
+     heading, but it still needs a name. */
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+</style>

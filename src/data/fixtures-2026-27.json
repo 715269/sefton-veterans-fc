@@ -11,17 +11,6 @@
     "type": "League"
   },
   {
-    "team": "Over 45s",
-    "opponent": "West Kirby",
-    "date": "2026-09-05",
-    "venue": "Away",
-    "result": null,
-    "scorers": [],
-    "homeAway": "Away",
-    "outcome": "Upcoming",
-    "type": "Friendly"
-  },
-  {
     "team": "Over 35s",
     "opponent": "Ellesmere Port Red Lions FC Vets",
     "date": "2026-09-05",
@@ -33,6 +22,17 @@
     "type": "League"
   },
   {
+    "team": "Over 45s",
+    "opponent": "West Kirby",
+    "date": "2026-09-05",
+    "venue": "Away",
+    "result": null,
+    "scorers": [],
+    "homeAway": "Away",
+    "outcome": "Upcoming",
+    "type": "Friendly"
+  },
+  {
     "team": "Over 50s",
     "opponent": "Hartford",
     "date": "2026-09-12",
@@ -42,17 +42,6 @@
     "homeAway": "Away",
     "outcome": "Upcoming",
     "type": "FLC"
-  },
-  {
-    "team": "Over 45s",
-    "opponent": "Hartford",
-    "date": "2026-09-19",
-    "venue": "Home",
-    "result": null,
-    "scorers": [],
-    "homeAway": "Home",
-    "outcome": "Upcoming",
-    "type": "FMC"
   },
   {
     "team": "Over 35s",
@@ -67,6 +56,17 @@
   },
   {
     "team": "Over 45s",
+    "opponent": "Hartford",
+    "date": "2026-09-19",
+    "venue": "Home",
+    "result": null,
+    "scorers": [],
+    "homeAway": "Home",
+    "outcome": "Upcoming",
+    "type": "FMC"
+  },
+  {
+    "team": "Over 45s",
     "opponent": "Orange Athletic",
     "date": "2026-09-26",
     "venue": "Away",
@@ -75,17 +75,6 @@
     "homeAway": "Away",
     "outcome": "Upcoming",
     "type": "Friendly"
-  },
-  {
-    "team": "Over 45s",
-    "opponent": "Upton",
-    "date": "2026-10-03",
-    "venue": "Home",
-    "result": null,
-    "scorers": [],
-    "homeAway": "Home",
-    "outcome": "Upcoming",
-    "type": "FMC"
   },
   {
     "team": "Over 35s",
@@ -100,6 +89,17 @@
   },
   {
     "team": "Over 45s",
+    "opponent": "Upton",
+    "date": "2026-10-03",
+    "venue": "Home",
+    "result": null,
+    "scorers": [],
+    "homeAway": "Home",
+    "outcome": "Upcoming",
+    "type": "FMC"
+  },
+  {
+    "team": "Over 45s",
     "opponent": "Wirral Vets",
     "date": "2026-10-10",
     "venue": "Away",
@@ -108,17 +108,6 @@
     "homeAway": "Away",
     "outcome": "Upcoming",
     "type": "Friendly"
-  },
-  {
-    "team": "Over 50s",
-    "opponent": "Eastham",
-    "date": "2026-10-17",
-    "venue": "Home",
-    "result": null,
-    "scorers": [],
-    "homeAway": "Home",
-    "outcome": "Upcoming",
-    "type": "FLC"
   },
   {
     "team": "Over 35s",
@@ -132,6 +121,17 @@
     "type": "League"
   },
   {
+    "team": "Over 50s",
+    "opponent": "Eastham",
+    "date": "2026-10-17",
+    "venue": "Home",
+    "result": null,
+    "scorers": [],
+    "homeAway": "Home",
+    "outcome": "Upcoming",
+    "type": "FLC"
+  },
+  {
     "team": "Over 45s",
     "opponent": "Ashton",
     "date": "2026-10-24",
@@ -141,17 +141,6 @@
     "homeAway": "Away",
     "outcome": "Upcoming",
     "type": "Friendly"
-  },
-  {
-    "team": "Over 45s",
-    "opponent": "Port Sunlight",
-    "date": "2026-10-31",
-    "venue": "Away",
-    "result": null,
-    "scorers": [],
-    "homeAway": "Away",
-    "outcome": "Upcoming",
-    "type": "FMC"
   },
   {
     "team": "Over 35s",
@@ -165,6 +154,17 @@
     "type": "League"
   },
   {
+    "team": "Over 45s",
+    "opponent": "Port Sunlight",
+    "date": "2026-10-31",
+    "venue": "Away",
+    "result": null,
+    "scorers": [],
+    "homeAway": "Away",
+    "outcome": "Upcoming",
+    "type": "FMC"
+  },
+  {
     "team": "Over 50s",
     "opponent": "Liobians",
     "date": "2026-11-07",
@@ -176,17 +176,6 @@
     "type": "FLC"
   },
   {
-    "team": "Over 45s",
-    "opponent": "Ramblers",
-    "date": "2026-11-14",
-    "venue": "Home",
-    "result": null,
-    "scorers": [],
-    "homeAway": "Home",
-    "outcome": "Upcoming",
-    "type": "Friendly"
-  },
-  {
     "team": "Over 35s",
     "opponent": "Blacon Youth Club FC Vets",
     "date": "2026-11-14",
@@ -196,6 +185,17 @@
     "homeAway": "Away",
     "outcome": "Upcoming",
     "type": "League"
+  },
+  {
+    "team": "Over 45s",
+    "opponent": "Ramblers",
+    "date": "2026-11-14",
+    "venue": "Home",
+    "result": null,
+    "scorers": [],
+    "homeAway": "Home",
+    "outcome": "Upcoming",
+    "type": "Friendly"
   },
   {
     "team": "Over 45s",
@@ -231,17 +231,6 @@
     "type": "FLC"
   },
   {
-    "team": "Over 45s",
-    "opponent": "Eastham",
-    "date": "2026-12-12",
-    "venue": "Away",
-    "result": null,
-    "scorers": [],
-    "homeAway": "Away",
-    "outcome": "Upcoming",
-    "type": "FMC"
-  },
-  {
     "team": "Over 35s",
     "opponent": "Blacon Youth Club FC Vets",
     "date": "2026-12-12",
@@ -253,8 +242,19 @@
     "type": "League"
   },
   {
+    "team": "Over 45s",
+    "opponent": "Eastham",
+    "date": "2026-12-12",
+    "venue": "Away",
+    "result": null,
+    "scorers": [],
+    "homeAway": "Away",
+    "outcome": "Upcoming",
+    "type": "FMC"
+  },
+  {
     "team": "Over 50s",
-    "opponent": "St Mary’s",
+    "opponent": "St Maryâ€™s",
     "date": "2026-12-19",
     "venue": "Away",
     "result": null,
@@ -319,17 +319,6 @@
     "type": "Friendly"
   },
   {
-    "team": "Over 45s",
-    "opponent": "Ashton",
-    "date": "2027-02-06",
-    "venue": "Home",
-    "result": null,
-    "scorers": [],
-    "homeAway": "Home",
-    "outcome": "Upcoming",
-    "type": "Friendly"
-  },
-  {
     "team": "Over 35s",
     "opponent": "Ellesmere Port Red Lions FC Vets",
     "date": "2027-02-06",
@@ -341,6 +330,17 @@
     "type": "League"
   },
   {
+    "team": "Over 45s",
+    "opponent": "Ashton",
+    "date": "2027-02-06",
+    "venue": "Home",
+    "result": null,
+    "scorers": [],
+    "homeAway": "Home",
+    "outcome": "Upcoming",
+    "type": "Friendly"
+  },
+  {
     "team": "Over 50s",
     "opponent": "Alsop",
     "date": "2027-02-13",
@@ -348,17 +348,6 @@
     "result": null,
     "scorers": [],
     "homeAway": "TBC",
-    "outcome": "Upcoming",
-    "type": "Friendly"
-  },
-  {
-    "team": "Over 45s",
-    "opponent": "Eastham",
-    "date": "2027-02-20",
-    "venue": "Home",
-    "result": null,
-    "scorers": [],
-    "homeAway": "Home",
     "outcome": "Upcoming",
     "type": "Friendly"
   },
@@ -375,8 +364,8 @@
   },
   {
     "team": "Over 45s",
-    "opponent": "West Kirby",
-    "date": "2027-02-27",
+    "opponent": "Eastham",
+    "date": "2027-02-20",
     "venue": "Home",
     "result": null,
     "scorers": [],
@@ -386,14 +375,14 @@
   },
   {
     "team": "Over 45s",
-    "opponent": "TBC",
-    "date": "2027-03-06",
-    "venue": "TBC",
+    "opponent": "West Kirby",
+    "date": "2027-02-27",
+    "venue": "Home",
     "result": null,
     "scorers": [],
-    "homeAway": "TBC",
+    "homeAway": "Home",
     "outcome": "Upcoming",
-    "type": "FMC"
+    "type": "Friendly"
   },
   {
     "team": "Over 35s",
@@ -405,17 +394,6 @@
     "homeAway": "Home",
     "outcome": "Upcoming",
     "type": "League"
-  },
-  {
-    "team": "Over 50s",
-    "opponent": "TBC",
-    "date": "2027-03-13",
-    "venue": "TBC",
-    "result": null,
-    "scorers": [],
-    "homeAway": "TBC",
-    "outcome": "Upcoming",
-    "type": "FLC"
   },
   {
     "team": "Over 35s",
@@ -438,17 +416,6 @@
     "homeAway": "TBC",
     "outcome": "Upcoming",
     "type": "Friendly"
-  },
-  {
-    "team": "Over 45s",
-    "opponent": "TBC",
-    "date": "2027-04-03",
-    "venue": "TBC",
-    "result": null,
-    "scorers": [],
-    "homeAway": "TBC",
-    "outcome": "Upcoming",
-    "type": "FMC"
   },
   {
     "team": "Over 35s",
@@ -482,17 +449,6 @@
     "homeAway": "Home",
     "outcome": "Upcoming",
     "type": "Friendly"
-  },
-  {
-    "team": "Over 50s",
-    "opponent": "TBC",
-    "date": "2027-04-24",
-    "venue": "TBC",
-    "result": null,
-    "scorers": [],
-    "homeAway": "TBC",
-    "outcome": "Upcoming",
-    "type": "FLC"
   },
   {
     "team": "Over 45s",

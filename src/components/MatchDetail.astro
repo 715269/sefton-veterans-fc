@@ -1,0 +1,844 @@
+---
+// Match detail drawer. Attaches itself to any table row carrying data-date,
+// data-team and data-opponent, which FixturesTable.astro already sets.
+// Rows without a filed result are left alone.
+//
+//   import MatchDetail from '../../components/MatchDetail.astro';
+//   <FixturesTable fixtures={fixtures} />
+//   <MatchDetail fixtures={fixtures} />
+
+const { fixtures = [] } = Astro.props;
+
+// Only what the panel needs, and only for matches actually played. Nothing
+// about subs payments or card reasons is in the feed, so nothing can leak here.
+const MATCHES = fixtures
+  .filter((f) => f.played && f.result)
+  .map((f) => ({
+    date: f.date, team: f.team, opponent: f.opponent,
+    homeAway: f.homeAway, type: f.type, result: f.result,
+    outcome: f.outcome, detail: f.detail ?? null
+  }));
+---
+
+<div class="md-scrim" id="md-scrim" hidden></div>
+
+<aside
+  class="md-panel"
+  id="md-panel"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="md-title"
+  hidden
+>
+  <button type="button" class="md-close" id="md-close" aria-label="Close match details">
+    <span aria-hidden="true">&times;</span>
+  </button>
+
+  <header class="md-head">
+    <p class="md-eyebrow" id="md-eyebrow">Match report</p>
+    <h2 id="md-title">Match details</h2>
+    <p class="md-meta" id="md-meta"></p>
+
+    <div class="md-score">
+      <span class="md-score-side" id="md-us">Sefton</span>
+      <span class="md-score-line" id="md-line">&ndash;</span>
+      <span class="md-score-side md-score-them" id="md-them">Opponent</span>
+    </div>
+    <p class="md-outcome" id="md-outcome"></p>
+  </header>
+
+  <div class="md-body" id="md-body"></div>
+
+  <footer class="md-foot" id="md-foot"></footer>
+</aside>
+
+<script is:inline define:vars={{ MATCHES }}>
+  /* Expects MATCHES: an array of season rows, results merged in. */
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  var panel  = $('md-panel');
+  var scrim  = $('md-scrim');
+  var lastFocused = null;
+  var byKey = {};
+
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'];
+
+  function key(date, team, opponent) {
+    return [date, team, opponent].join('|').trim().toLowerCase();
+  }
+
+  function prettyDate(iso) {
+    var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return iso || '';
+    return Number(m[3]) + ' ' + MONTHS[Number(m[2]) - 1] + ' ' + m[1];
+  }
+
+  function prettyStamp(raw) {
+    if (!raw) return '';
+    var d = new Date(raw);
+    if (isNaN(d.getTime())) return '';
+    var mins = d.getMinutes();
+    return Number(d.getDate()) + ' ' + MONTHS[d.getMonth()].slice(0, 3) + ' ' +
+           d.getFullYear() + ', ' + d.getHours() + ':' + (mins < 10 ? '0' + mins : mins);
+  }
+
+  // "Bishop, Alex" reads better as "Alex Bishop" in a sentence.
+  function readable(name) {
+    var parts = String(name).split(',');
+    if (parts.length !== 2) return String(name).trim();
+    return parts[1].trim() + ' ' + parts[0].trim();
+  }
+
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined && text !== null) node.textContent = text;
+    return node;
+  }
+
+  /* ---------------- building the panel ---------------- */
+
+  function marksFor(name, detail, hidePosition) {
+    var marks = [];
+    // When the sheet is grouped by position, the heading above already says
+    // this — repeating it on every row is noise.
+    if (!hidePosition) {
+      var pos = positionOf(name, detail);
+      if (pos) marks.push({ kind: pos === 'GK' ? 'gk' : 'pos', text: pos });
+    }
+    var scored = (detail.scorers || []).filter(function (s) { return s.name === name; })[0];
+    if (scored) {
+      marks.push({ kind: 'goal', text: scored.goals > 1 ? 'Goal \u00d7' + scored.goals : 'Goal' });
+    }
+    // A player can be both — a second yellow, or a booking then a red later.
+    // Record what the captain recorded rather than letting one supersede.
+    if ((detail.booked || []).indexOf(name) !== -1) marks.push({ kind: 'booked', text: 'Booked' });
+    if ((detail.sentOff || []).indexOf(name) !== -1) marks.push({ kind: 'sentOff', text: 'Sent off' });
+    return marks;
+  }
+
+  /* ---------------- positions ---------------- */
+
+  var POS_ORDER = ['GK', 'DEF', 'MID', 'FWD'];
+  var POS_LABEL = {
+    GK: 'Goalkeeper', DEF: 'Defenders', MID: 'Midfielders', FWD: 'Forwards'
+  };
+
+  function positionOf(name, detail) {
+    return (detail.positions || {})[name] ||
+           (detail.keeper === name ? 'GK' : '');
+  }
+
+  // Groups the starting eleven GK → DEF → MID → FWD, but ONLY when every
+  // starter has a recognised position. A part-grouped sheet — four defenders,
+  // two midfielders and five under "unspecified" — misrepresents the shape of
+  // the side more than a plain list does, so in that case we return null and
+  // the caller falls back to the numbered list.
+  //
+  // Note this guards against MISSING positions, not wrong ones. If a whole
+  // squad is recorded as DEF in the Roster tab, this will faithfully render
+  // an eleven-man back line. That has to be fixed in the spreadsheet.
+  function groupStarters(starting, detail) {
+    var complete = starting.every(function (n) {
+      return POS_ORDER.indexOf(positionOf(n, detail)) !== -1;
+    });
+    if (!complete) return null;
+
+    var groups = [];
+    POS_ORDER.forEach(function (pos) {
+      var names = starting.filter(function (n) {
+        return positionOf(n, detail) === pos;
+      });
+      if (names.length) groups.push({ pos: pos, names: names });
+    });
+    return groups;
+  }
+
+  function sheetRows(ol, names, detail, startAt, hidePosition) {
+    names.forEach(function (name, i) {
+      var li = el('li');
+      li.appendChild(el('span', 'num', startAt + i));
+      li.appendChild(el('span', 'who', readable(name)));
+      marksFor(name, detail, hidePosition).forEach(function (m) {
+        var mark = el('span', 'mark', m.text);
+        mark.setAttribute('data-kind', m.kind);
+        li.appendChild(mark);
+      });
+      ol.appendChild(li);
+    });
+  }
+
+  function buildTeamsheet(detail) {
+    var section = el('section', 'md-section');
+    section.appendChild(el('h3', null, 'Teamsheet'));
+
+    var starting = detail.starting || [];
+    var bench = detail.bench || [];
+
+    if (!starting.length && !bench.length) {
+      section.appendChild(el('p', 'md-empty',
+        'No teamsheet was recorded for this match.'));
+      return section;
+    }
+
+    var sheet = el('div', 'md-sheet');
+
+    if (starting.length) {
+      sheet.appendChild(el('p', 'md-subhead', 'Starting'));
+
+      var groups = groupStarters(starting, detail);
+
+      if (groups) {
+        // Numbering runs 1..11 straight through the groups. These were only
+        // ever ordinals — the order the captain tapped names in, not shirt
+        // numbers — so renumbering by position loses nothing.
+        var n = 1;
+        groups.forEach(function (g) {
+          sheet.appendChild(el('p', 'md-poshead', POS_LABEL[g.pos]));
+          var groupOl = el('ol');
+          sheetRows(groupOl, g.names, detail, n, true);
+          sheet.appendChild(groupOl);
+          n += g.names.length;
+        });
+      } else {
+        var ol = el('ol');
+        sheetRows(ol, starting, detail, 1);
+        sheet.appendChild(ol);
+      }
+    }
+
+    // The bench stays in the order it was filed. That plausibly reflects who
+    // came on first, which is real information — regrouping would destroy it.
+    if (bench.length) {
+      sheet.appendChild(el('p', 'md-subhead', 'Bench'));
+      var benchOl = el('ol');
+      sheetRows(benchOl, bench, detail, starting.length + 1);
+      sheet.appendChild(benchOl);
+    }
+
+    section.appendChild(sheet);
+    return section;
+  }
+
+  function buildScorers(detail) {
+    var scorers = detail.scorers || [];
+    var own = detail.ownGoals || 0;
+    if (!scorers.length && !own) return null;
+
+    var section = el('section', 'md-section');
+    section.appendChild(el('h3', null, 'Goals'));
+
+    var list = el('ul', 'md-list');
+    scorers.forEach(function (s) {
+      var li = el('li');
+      li.appendChild(el('span', null, readable(s.name)));
+      if (s.goals > 1) li.appendChild(el('span', 'count', s.goals));
+      list.appendChild(li);
+    });
+
+    if (own) {
+      var li = el('li');
+      li.appendChild(el('span', null, 'Own goal (opposition)'));
+      if (own > 1) li.appendChild(el('span', 'count', own));
+      list.appendChild(li);
+    }
+
+    section.appendChild(list);
+    return section;
+  }
+
+  function buildCards(detail) {
+    var booked = detail.booked || [];
+    var sentOff = detail.sentOff || [];
+    if (!booked.length && !sentOff.length) return null;
+
+    var section = el('section', 'md-section');
+    section.appendChild(el('h3', null, 'Discipline'));
+
+    // One row per player, sent off first, each showing every card they got.
+    var order = [];
+    sentOff.forEach(function (n) { if (order.indexOf(n) === -1) order.push(n); });
+    booked.forEach(function (n) { if (order.indexOf(n) === -1) order.push(n); });
+
+    var list = el('ul', 'md-list');
+    order.forEach(function (name) {
+      var li = el('li');
+      li.appendChild(el('span', null, readable(name)));
+      var tags = el('span', 'md-tags');
+      if (booked.indexOf(name) !== -1) {
+        var b = el('span', 'md-tag', 'Booked');
+        b.setAttribute('data-kind', 'booked');
+        tags.appendChild(b);
+      }
+      if (sentOff.indexOf(name) !== -1) {
+        var r = el('span', 'md-tag', 'Sent off');
+        r.setAttribute('data-kind', 'sentOff');
+        tags.appendChild(r);
+      }
+      li.appendChild(tags);
+      list.appendChild(li);
+    });
+
+    section.appendChild(list);
+    return section;
+  }
+
+  function buildNotes(detail) {
+    if (!detail.notes) return null;
+    var section = el('section', 'md-section');
+    section.appendChild(el('h3', null, 'Match notes'));
+    section.appendChild(el('p', 'md-notes', detail.notes));
+    return section;
+  }
+
+  /* ---------------- opening and closing ---------------- */
+
+  function open(match, trigger) {
+    var detail = match.detail || {};
+    var home = match.homeAway === 'Home';
+
+    $('md-eyebrow').textContent = match.type
+      ? match.type + (home ? ' \u00b7 Home' : ' \u00b7 Away')
+      : (home ? 'Home' : 'Away');
+
+    $('md-title').textContent = match.team + ' v ' + match.opponent;
+    $('md-meta').textContent = prettyDate(match.date);
+
+    var score = String(match.result || '').split('-');
+    $('md-us').textContent = 'Sefton ' + match.team;
+    $('md-them').textContent = match.opponent;
+    $('md-line').textContent = score.length === 2
+      ? score[0] + ' \u2013 ' + score[1]
+      : '\u2013';
+
+    var outcome = $('md-outcome');
+    outcome.textContent = match.outcome === 'Win'  ? 'Won'
+                        : match.outcome === 'Loss' ? 'Lost'
+                        : match.outcome === 'Draw' ? 'Drawn' : '';
+    outcome.setAttribute('data-outcome', String(match.outcome || '').toLowerCase());
+
+    var body = $('md-body');
+    body.innerHTML = '';
+    body.scrollTop = 0;
+
+    if (!match.detail) {
+      body.appendChild(el('p', 'md-empty',
+        'The result is recorded, but no match report was filed for this game.'));
+    } else {
+      body.appendChild(buildTeamsheet(detail));
+      [buildScorers(detail), buildCards(detail), buildNotes(detail)]
+        .forEach(function (section) { if (section) body.appendChild(section); });
+    }
+
+    var foot = $('md-foot');
+    foot.innerHTML = '';
+    if (detail.captain || detail.submittedAt) {
+      var line = el('span');
+      if (detail.captain) {
+        line.appendChild(document.createTextNode('Filed by '));
+        line.appendChild(el('strong', null, readable(detail.captain)));
+      }
+      var stamp = prettyStamp(detail.submittedAt);
+      if (stamp) {
+        line.appendChild(document.createTextNode(
+          (detail.captain ? ' on ' : 'Filed ') + stamp));
+      }
+      foot.appendChild(line);
+    } else {
+      foot.appendChild(el('span', null, 'No match report on file.'));
+    }
+
+    lastFocused = trigger || document.activeElement;
+
+    scrim.hidden = false;
+    panel.hidden = false;
+    // Let the browser paint the hidden state before animating in.
+    requestAnimationFrame(function () {
+      scrim.classList.add('is-open');
+      panel.classList.add('is-open');
+    });
+
+    document.body.style.overflow = 'hidden';
+    $('md-close').focus();
+  }
+
+  function close() {
+    scrim.classList.remove('is-open');
+    panel.classList.remove('is-open');
+    document.body.style.overflow = '';
+
+    var done = function () {
+      panel.hidden = true;
+      scrim.hidden = true;
+    };
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      done();
+    } else {
+      setTimeout(done, 280);
+    }
+
+    if (lastFocused && lastFocused.focus) lastFocused.focus();
+    lastFocused = null;
+  }
+
+  function isOpen() { return !panel.hidden; }
+
+  // Keep tabbing inside the panel while it is open.
+  function trapFocus(e) {
+    if (e.key !== 'Tab' || !isOpen()) return;
+    var focusable = panel.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (!focusable.length) return;
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
+  /* ---------------- wiring up the table ---------------- */
+
+  function rowIdentity(row) {
+    var date = row.getAttribute('data-date');
+    var team = row.getAttribute('data-team');
+    var opponent = row.getAttribute('data-opponent');
+    if (date && team && opponent) return key(date, team, opponent);
+    return null;
+  }
+
+  function attach() {
+    // MATCHES has already been narrowed to played matches by the component.
+    // Check for a result rather than a `played` flag, which is not carried over.
+    (MATCHES || []).forEach(function (m) {
+      if (m && m.date && m.team && m.opponent && m.result) {
+        byKey[key(m.date, m.team, m.opponent)] = m;
+      }
+    });
+
+    // Table rows on the fixtures page, plus anything that opts in with
+    // data-md-row — the matchday strip on the home page uses divs, not a table.
+    var rows = document.querySelectorAll('table tbody tr, [data-md-row]');
+    var opened = 0;
+
+    Array.prototype.forEach.call(rows, function (row) {
+      var id = rowIdentity(row);
+      if (!id || !byKey[id]) return;
+
+      row.setAttribute('data-md-open', id);
+      row.setAttribute('tabindex', '0');
+      row.setAttribute('role', 'button');
+      row.setAttribute('aria-label',
+        'Match details: ' + byKey[id].team + ' versus ' + byKey[id].opponent);
+      opened++;
+    });
+
+    if (!opened && rows.length) {
+      var keys = Object.keys(byKey);
+      if (!keys.length) {
+        console.warn('[match-detail] No played matches were passed in, so no ' +
+                     'row is clickable. Check the results feed is returning data.');
+      } else {
+        console.warn('[match-detail] ' + keys.length + ' match(es) available but no ' +
+                     'row matched. Rows need data-date (YYYY-MM-DD), data-team and ' +
+                     'data-opponent. Expected one of: ' + keys.join(' / '));
+      }
+    }
+  }
+
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.md-panel')) return;
+    var row = e.target.closest && e.target.closest('[data-md-open]');
+    if (row) {
+      var m = byKey[row.getAttribute('data-md-open')];
+      if (m) open(m, row);
+    }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && isOpen()) { close(); return; }
+    trapFocus(e);
+
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.hasAttribute &&
+        e.target.hasAttribute('data-md-open')) {
+      e.preventDefault();
+      var m = byKey[e.target.getAttribute('data-md-open')];
+      if (m) open(m, e.target);
+    }
+  });
+
+  $('md-close').addEventListener('click', close);
+  scrim.addEventListener('click', close);
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', attach);
+  } else {
+    attach();
+  }
+</script>
+
+<style is:global>
+  /* Match detail drawer.
+     Global rather than scoped because the panel's contents are built by
+     JavaScript after the page has rendered. Everything is prefixed .md-
+     so it cannot leak into the rest of the site. */
+
+  :root {
+    --md-navy: #0f172a;
+    --md-blue: #2323e0;
+    --md-ink: #1e293b;
+    --md-muted: #64748b;
+    --md-line: #e2e8f0;
+    --md-paper: #fbfaf7;
+    --md-rule: #e7e3d8;
+    --md-pencil: #a8a08c;
+    --md-win: #047857;
+    --md-loss: #b91c1c;
+    --md-draw: #b45309;
+  }
+
+  /* Anything you can open says so — but only if there is something to open.
+     The hover tint is table-only; other triggers style their own hover, since
+     a flat grey wash is wrong on a card. */
+  [data-md-open] { cursor: pointer; }
+  tr[data-md-open]:hover { background: #f1f5f9; }
+  [data-md-open]:focus-visible {
+    outline: 3px solid var(--md-blue);
+    outline-offset: -3px;
+  }
+
+  .md-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: rgba(15, 23, 42, 0.45);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+
+  .md-scrim.is-open { opacity: 1; }
+
+  .md-panel {
+    position: fixed;
+    z-index: 100;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    overscroll-behavior: contain;
+
+    /* Mobile first: a sheet that comes up from the bottom. */
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 88vh;
+    border-radius: 18px 18px 0 0;
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+    box-shadow: 0 -8px 40px rgba(15, 23, 42, 0.25);
+  }
+
+  .md-panel.is-open { transform: none; }
+
+  .md-close {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.7rem;
+    width: 44px;
+    height: 44px;
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--md-muted);
+    background: #fff;
+    border: 1.5px solid var(--md-line);
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 2;
+  }
+
+  .md-close:hover { color: var(--md-navy); border-color: var(--md-navy); }
+
+  /* ---------- Header ---------- */
+
+  .md-head {
+    flex: 0 0 auto;
+    padding: 1.5rem 1.25rem 1.1rem;
+    border-bottom: 1px solid var(--md-line);
+  }
+
+  .md-eyebrow {
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--md-blue);
+    margin: 0 0 0.3rem;
+  }
+
+  .md-head h2 {
+    font-size: 1.4rem;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    color: var(--md-navy);
+    margin: 0 0 0.25rem;
+    padding-right: 3rem;
+  }
+
+  .md-meta {
+    font-size: 0.85rem;
+    color: var(--md-muted);
+    margin: 0 0 1rem;
+  }
+
+  .md-score {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+  }
+
+  .md-score-side {
+    flex: 1 1 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--md-navy);
+    line-height: 1.2;
+  }
+
+  .md-score-them { text-align: right; }
+
+  .md-score-line {
+    flex: 0 0 auto;
+    font-size: 2.1rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--md-navy);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .md-outcome {
+    margin: 0.7rem 0 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .md-outcome[data-outcome='win']  { color: var(--md-win); }
+  .md-outcome[data-outcome='loss'] { color: var(--md-loss); }
+  .md-outcome[data-outcome='draw'] { color: var(--md-draw); }
+
+  /* ---------- Body ---------- */
+
+  .md-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 1.25rem;
+  }
+
+  .md-section { margin: 0 0 1.5rem; }
+  .md-section:last-child { margin-bottom: 0; }
+
+  .md-section h3 {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--md-muted);
+    margin: 0 0 0.5rem;
+  }
+
+  /* The teamsheet — ruled paper, the same artefact the captain filled in. */
+  .md-sheet {
+    background: var(--md-paper);
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 33px,
+      var(--md-rule) 33px,
+      var(--md-rule) 34px
+    );
+    border: 1.5px solid #ded9cc;
+    border-radius: 10px;
+    padding: 0.5rem 0.9rem 0.7rem;
+  }
+
+  .md-sheet ol { list-style: none; margin: 0; padding: 0; }
+
+  .md-sheet li {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    height: 34px;
+    font-size: 0.9rem;
+    color: var(--md-navy);
+  }
+
+  .md-sheet .num {
+    flex: 0 0 auto;
+    min-width: 1.7ch;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--md-pencil);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .md-sheet .who { flex: 1 1 auto; }
+
+  /* Marks in the margin, as they'd be scribbled on a real sheet. */
+  .md-sheet .mark {
+    flex: 0 0 auto;
+    margin-left: 0.1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    color: var(--md-muted);
+  }
+
+  .md-sheet .mark[data-kind='gk'] {
+    color: #0f766e;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+
+  .md-sheet .mark[data-kind='pos'] {
+    color: var(--md-pencil);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+
+  .md-sheet .mark[data-kind='goal']    { color: var(--md-win); }
+  .md-sheet .mark[data-kind='booked']  { color: var(--md-draw); }
+  .md-sheet .mark[data-kind='sentOff'] { color: var(--md-loss); }
+
+  .md-subhead {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--md-pencil);
+    height: 34px;
+    display: flex;
+    align-items: center;
+    margin: 0;
+  }
+
+  /* Position headings within the starting eleven. Indented under "Starting",
+     and lighter than it so the hierarchy reads. The 34px height is not
+     cosmetic — the sheet's ruled-paper background repeats every 34px, so any
+     row that isn't exactly that tall knocks every line below it off the rule. */
+  .md-poshead {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--md-muted);
+    height: 34px;
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding-left: 0.2rem;
+  }
+
+  .md-list { list-style: none; margin: 0; padding: 0; }
+
+  .md-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    font-size: 0.92rem;
+    color: var(--md-navy);
+    border-bottom: 1px solid var(--md-line);
+  }
+
+  .md-list li:last-child { border-bottom: none; }
+
+  .md-list .count {
+    color: var(--md-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .md-tags {
+    display: inline-flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .md-tag {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 4px;
+  }
+
+  .md-tag[data-kind='booked']  { color: #78350f; background: #fef3c7; }
+  .md-tag[data-kind='sentOff'] { color: #7f1d1d; background: #fee2e2; }
+
+  .md-notes {
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: var(--md-ink);
+    margin: 0;
+    padding: 0.75rem 0.9rem;
+    background: #f8fafc;
+    border-left: 3px solid var(--md-line);
+    border-radius: 0 6px 6px 0;
+    white-space: pre-line;
+  }
+
+  .md-empty {
+    font-size: 0.9rem;
+    color: var(--md-muted);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  /* ---------- Footer ---------- */
+
+  .md-foot {
+    flex: 0 0 auto;
+    padding: 0.85rem 1.25rem calc(0.85rem + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--md-line);
+    background: #f8fafc;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--md-muted);
+  }
+
+  .md-foot strong { color: var(--md-navy); font-weight: 600; }
+
+  /* ---------- Desktop: a side panel instead ---------- */
+
+  @media (min-width: 768px) {
+    .md-panel {
+      top: 0;
+      bottom: 0;
+      left: auto;
+      right: 0;
+      width: min(440px, 92vw);
+      max-height: none;
+      border-radius: 0;
+      transform: translateX(100%);
+      box-shadow: -8px 0 40px rgba(15, 23, 42, 0.22);
+    }
+
+    .md-head { padding: 2rem 1.75rem 1.25rem; }
+    .md-head h2 { font-size: 1.6rem; }
+    .md-body { padding: 1.75rem; }
+    .md-foot { padding: 1rem 1.75rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .md-panel, .md-scrim { transition: none; }
+  }
+</style>
