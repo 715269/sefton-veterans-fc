@@ -1,0 +1,608 @@
+---
+// src/pages/teams/[team].astro
+//
+// One file, four pages: /teams/over-35s, /teams/over-45s, /teams/over-50s and
+// /teams/open-age. The routes come from src/lib/teams.js, so adding a fifth
+// side to that array is enough to give it a page — nothing here needs editing.
+//
+// Everything on the page is derived from data that already exists: the fixture
+// list, filed match reports, and the Roster tab. Nothing is maintained by hand.
+
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import MatchDetail from '../../components/MatchDetail.astro';
+import { TEAMS } from '../../lib/teams.js';
+import players from '../../data/players.json';
+import {
+  getSeason,
+  getSummary,
+  getResults,
+  getSquads,
+  getPositions,
+  getStatsByTeam,
+} from '../../lib/season.js';
+
+export function getStaticPaths() {
+  return TEAMS.map((entry) => ({
+    params: { team: entry.slug },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const name = entry.name;
+
+const [season, summary, results, squads, positions, statsByTeam] = await Promise.all([
+  getSeason(),
+  getSummary(name),
+  getResults(name),
+  getSquads(players),
+  getPositions(),
+  getStatsByTeam(),
+]);
+
+/* ---------------- fixtures still to come ----------------
+   Deliberately not getUpcoming(). That filters on the date at BUILD time, so a
+   fixture that slips into the past without a report filed would vanish from
+   this page entirely — not in the results, not in the fixtures. Everything
+   unplayed is listed here instead, and a small script at the foot of the page
+   badges the ones whose date has gone by. Same reasoning as FixturesTable. */
+const fixtures = season
+  .filter((f) => f.team === name && !f.played)
+  .sort((a, b) => a.date.localeCompare(b.date));
+
+const isRealFixture = (f) =>
+  Boolean(f.opponent) && f.opponent.trim().toUpperCase() !== 'TBC' && !f.provisional;
+
+/* ---------------- squad ----------------
+   The Over 50s draw on the Over 45s roster on purpose. Rather than hardcode
+   that, take whatever the Roster feed gives for this team and only borrow if
+   it comes back empty — so the day the Over 50s get their own roster tab, this
+   picks it up without anyone remembering to edit this file. */
+const BORROWS_FROM = { 'Over 50s': 'Over 45s' };
+
+const ownSquad = Array.isArray(squads[name]) ? squads[name] : [];
+const lender = BORROWS_FROM[name];
+const borrowed = ownSquad.length === 0 && Boolean(lender);
+const squad = borrowed ? (squads[lender] ?? []) : ownSquad;
+
+const POSITION_GROUPS = [
+  ['GK', 'Goalkeepers'],
+  ['DEF', 'Defenders'],
+  ['MID', 'Midfielders'],
+  ['FWD', 'Forwards'],
+];
+const KNOWN_POSITIONS = POSITION_GROUPS.map(([code]) => code);
+
+const sortedSquad = [...squad].sort((a, b) => a.localeCompare(b));
+const withPosition = sortedSquad.filter((n) => KNOWN_POSITIONS.includes(positions[n]));
+
+/* Grouping a squad where only three men have a recorded position produces a
+   page that is mostly "Unassigned", which is worse than no grouping at all.
+   Below half, fall back to one alphabetical list. */
+const groupPositions = sortedSquad.length > 0 &&
+  withPosition.length / sortedSquad.length >= 0.5;
+
+const squadGroups = POSITION_GROUPS
+  .map(([code, label]) => ({
+    label,
+    players: sortedSquad.filter((n) => positions[n] === code),
+  }))
+  .filter((g) => g.players.length > 0);
+
+const unplaced = sortedSquad.filter((n) => !KNOWN_POSITIONS.includes(positions[n]));
+
+/* ---------------- rankings ---------------- */
+const stats = statsByTeam[name] ?? { scorers: [], appearances: [] };
+const topScorers = stats.scorers.slice(0, 10);
+const topAppearances = stats.appearances.slice(0, 10);
+
+/* ---------------- display helpers ----------------
+   Names are stored "Surname, Forename" throughout the system, which is right
+   for sorting and wrong for reading. Sort on the stored form, show the
+   readable one. A name with no comma is passed through untouched. */
+function readable(raw) {
+  const parts = String(raw).split(',');
+  if (parts.length !== 2) return String(raw).trim();
+  return `${parts[1].trim()} ${parts[0].trim()}`;
+}
+
+function prettyDate(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+const FORM_WORDS = { W: 'Win', D: 'Draw', L: 'Loss' };
+---
+
+<BaseLayout
+  title={name}
+  description={`${name} at Sefton Veterans FC — results, fixtures, squad and season statistics.`}
+>
+  <section class="hero-band">
+    <div class="container">
+      <p class="eyebrow"><a href="/teams">Teams</a></p>
+      <h1>{name}</h1>
+      <p>{entry.blurb}</p>
+    </div>
+  </section>
+
+  <!-- ---------------- season summary ---------------- -->
+  <section class="section-padded container">
+    <h2>This season</h2>
+
+    {summary.played === 0 ? (
+      <p class="muted">No match reports filed for the {name} yet this season.</p>
+    ) : (
+      <>
+        <div class="stat-strip">
+          <div class="stat"><span class="stat-num">{summary.played}</span><span class="stat-label">Played</span></div>
+          <div class="stat"><span class="stat-num">{summary.won}</span><span class="stat-label">Won</span></div>
+          <div class="stat"><span class="stat-num">{summary.drawn}</span><span class="stat-label">Drawn</span></div>
+          <div class="stat"><span class="stat-num">{summary.lost}</span><span class="stat-label">Lost</span></div>
+          <div class="stat"><span class="stat-num">{summary.goalsFor}</span><span class="stat-label">Goals for</span></div>
+          <div class="stat"><span class="stat-num">{summary.goalsAgainst}</span><span class="stat-label">Goals against</span></div>
+          <div class="stat">
+            <span class="stat-num">{summary.goalDifference > 0 ? `+${summary.goalDifference}` : summary.goalDifference}</span>
+            <span class="stat-label">Goal difference</span>
+          </div>
+        </div>
+
+        {summary.form.length > 0 && (
+          <p class="form-line">
+            <span class="form-label">Recent form</span>
+            {summary.form.map((letter) => (
+              <span
+                class={`form-pill form-${letter.toLowerCase()}`}
+                title={FORM_WORDS[letter] ?? letter}
+              >{letter}</span>
+            ))}
+            <span class="muted small">oldest first</span>
+          </p>
+        )}
+      </>
+    )}
+  </section>
+
+  <!-- ---------------- results ---------------- -->
+  {results.length > 0 && (
+    <section class="section-light">
+      <div class="section-padded container">
+        <h2>Results</h2>
+        <p class="muted small">Tap a row for the teamsheet, scorers and match notes.</p>
+
+        <div class="table-scroll">
+          <table class="team-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Opponent</th>
+                <th>Venue</th>
+                <th>Type</th>
+                <th>Result</th>
+                <th>Scorers</th>
+                <th>Outcome</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.map((f) => (
+                <tr
+                  data-md-row
+                  data-date={f.date}
+                  data-team={f.team}
+                  data-opponent={f.opponent}
+                  class={`outcome-${String(f.outcome).toLowerCase()}`}
+                >
+                  <td>{prettyDate(f.date)}</td>
+                  <td>{f.opponent}</td>
+                  <td>{f.venue}</td>
+                  <td>{f.type}</td>
+                  <td class="nowrap">{f.result}</td>
+                  <td>{f.scorers.length > 0 ? f.scorers.join(', ') : '—'}</td>
+                  <td><span class="outcome-badge">{f.outcome}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- ---------------- fixtures ---------------- -->
+  <section class="section-padded container">
+    <h2>Fixtures</h2>
+
+    {fixtures.length === 0 ? (
+      <p class="muted">No fixtures left on the calendar for the {name}.</p>
+    ) : (
+      <div class="table-scroll">
+        <table class="team-table" id="team-fixtures">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Opponent</th>
+              <th>Venue</th>
+              <th>Type</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fixtures.map((f) => (
+              <tr
+                data-date={f.date}
+                data-real={isRealFixture(f) ? 'yes' : 'no'}
+                class="outcome-upcoming"
+              >
+                <td>{prettyDate(f.date)}</td>
+                <td>{f.opponent || 'TBC'}</td>
+                <td>{f.venue || 'TBC'}</td>
+                <td>{f.type || '—'}</td>
+                <td><span class="outcome-badge">Upcoming</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </section>
+
+  <!-- ---------------- squad ---------------- -->
+  <section class="section-light">
+    <div class="section-padded container">
+      <h2>Squad</h2>
+
+      {borrowed && (
+        <p class="muted small">
+          The {name} draw on the {lender} roster, so this is the same list of players.
+        </p>
+      )}
+
+      {squad.length === 0 ? (
+        <p class="muted">No players on the roster for the {name} yet.</p>
+      ) : groupPositions ? (
+        <div class="squad-grid">
+          {squadGroups.map((group) => (
+            <div>
+              <h3>{group.label}</h3>
+              <ul class="name-list">
+                {group.players.map((n) => <li>{readable(n)}</li>)}
+              </ul>
+            </div>
+          ))}
+          {unplaced.length > 0 && (
+            <div>
+              <h3>Position not recorded</h3>
+              <ul class="name-list">
+                {unplaced.map((n) => <li>{readable(n)}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      ) : (
+        <ul class="name-list columns">
+          {sortedSquad.map((n) => <li>{readable(n)}</li>)}
+        </ul>
+      )}
+    </div>
+  </section>
+
+  <!-- ---------------- rankings ---------------- -->
+  {(topScorers.length > 0 || topAppearances.length > 0) && (
+    <section class="section-padded container">
+      <h2>Season statistics</h2>
+      <p class="muted small">
+        Counted from match reports filed through this website, so these are
+        current-season figures only — not club career totals.
+      </p>
+
+      <div class="rank-grid">
+        {topScorers.length > 0 && (
+          <div>
+            <h3>Goalscorers</h3>
+            <table class="team-table">
+              <thead>
+                <tr><th class="narrow">#</th><th>Player</th><th class="narrow">Goals</th></tr>
+              </thead>
+              <tbody>
+                {topScorers.map((p) => (
+                  <tr>
+                    <td class="narrow">{p.joint ? `=${p.rank}` : p.rank}</td>
+                    <td>{readable(p.name)}</td>
+                    <td class="narrow">{p.goals}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {topAppearances.length > 0 && (
+          <div>
+            <h3>Appearances</h3>
+            <table class="team-table">
+              <thead>
+                <tr>
+                  <th class="narrow">#</th><th>Player</th>
+                  <th class="narrow">Apps</th><th class="narrow">Starts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topAppearances.map((p) => (
+                  <tr>
+                    <td class="narrow">{p.joint ? `=${p.rank}` : p.rank}</td>
+                    <td>{readable(p.name)}</td>
+                    <td class="narrow">{p.appearances}</td>
+                    <td class="narrow">{p.starts}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+  )}
+
+  <MatchDetail fixtures={results} />
+</BaseLayout>
+
+<script>
+  // A fixture whose date has passed with no report filed still says "Upcoming",
+  // because that was true when the site last built. Corrected here, in the
+  // browser, where "today" is always genuinely today.
+  //
+  // Rows marked data-real="no" are reserved dates with no opponent arranged —
+  // nobody owes a report for a match that was never played, so they are left
+  // saying Upcoming.
+  const table = document.getElementById('team-fixtures');
+
+  if (table) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (const row of Array.from(table.querySelectorAll('tbody tr'))) {
+      if (row.dataset.real !== 'yes') continue;
+
+      const raw = row.dataset.date;
+      if (!raw) continue;
+
+      // Local midnight. The bare 'YYYY-MM-DD' string is treated as UTC by the
+      // Date constructor, which shifts the day for anyone west of Greenwich.
+      const kickoff = new Date(raw + 'T00:00:00');
+      if (isNaN(kickoff.getTime()) || kickoff >= today) continue;
+
+      row.classList.remove('outcome-upcoming');
+      row.classList.add('outcome-awaited');
+
+      const badge = row.querySelector('.outcome-badge');
+      if (badge) badge.textContent = 'Awaited';
+    }
+  }
+</script>
+
+<style>
+  .hero-band {
+    background: var(--color-navy);
+    color: white;
+    padding: 2.5rem 0;
+  }
+
+  .hero-band h1 {
+    color: white;
+    margin-bottom: 0.5rem;
+  }
+
+  .hero-band p {
+    color: #cbd5e1;
+    margin: 0;
+  }
+
+  .eyebrow {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .eyebrow a {
+    color: #94a3b8;
+    text-decoration: none;
+  }
+
+  .eyebrow a:hover {
+    color: white;
+  }
+
+  .muted {
+    color: #64748b;
+  }
+
+  .small {
+    font-size: 0.9rem;
+  }
+
+  /* Season summary */
+  .stat-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 0.75rem;
+    margin: 1.25rem 0;
+  }
+
+  .stat {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.9rem 0.75rem;
+    text-align: center;
+  }
+
+  .stat-num {
+    display: block;
+    font-family: var(--font-heading);
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--color-navy);
+    line-height: 1.1;
+  }
+
+  .stat-label {
+    display: block;
+    font-size: 0.78rem;
+    color: #64748b;
+    margin-top: 0.25rem;
+  }
+
+  .form-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0;
+  }
+
+  .form-label {
+    font-weight: 600;
+    margin-right: 0.35rem;
+  }
+
+  .form-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.7rem;
+    height: 1.7rem;
+    border-radius: 50%;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: default;
+  }
+
+  .form-w { background: #dcfce7; color: #166534; }
+  .form-d { background: #fef9c3; color: #854d0e; }
+  .form-l { background: #fee2e2; color: #991b1b; }
+
+  /* Tables */
+  .table-scroll {
+    overflow-x: auto;
+  }
+
+  .team-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+    margin-top: 0.75rem;
+    background: white;
+  }
+
+  .team-table thead th {
+    background: var(--color-navy);
+    color: white;
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    white-space: nowrap;
+    font-family: var(--font-body);
+    font-weight: 600;
+  }
+
+  .team-table tbody td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .team-table tbody tr:nth-child(even) {
+    background: #f8fafc;
+  }
+
+  .team-table .narrow {
+    width: 1%;
+    white-space: nowrap;
+  }
+
+  .nowrap {
+    white-space: nowrap;
+  }
+
+  /* Rows the drawer has claimed get a pointer. MatchDetail adds the attribute
+     itself once it finds a match, so unplayed rows never look clickable. */
+  .team-table tbody tr[data-md-open] {
+    cursor: pointer;
+  }
+
+  .team-table tbody tr[data-md-open]:hover {
+    background: #eef2ff;
+  }
+
+  /* Outcome badges, matching FixturesTable */
+  .outcome-badge {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .outcome-win .outcome-badge { background: #dcfce7; color: #166534; }
+  .outcome-draw .outcome-badge { background: #fef9c3; color: #854d0e; }
+  .outcome-loss .outcome-badge { background: #fee2e2; color: #991b1b; }
+  .outcome-upcoming .outcome-badge { background: #e0e7ff; color: #2323e0; }
+  .outcome-postponed .outcome-badge { background: #f1f5f9; color: #475569; }
+  .outcome-unknown .outcome-badge { background: #f1f5f9; color: #94a3b8; }
+
+  .outcome-awaited .outcome-badge {
+    background: transparent;
+    color: #b45309;
+    border: 1px dashed #f59e0b;
+    padding: calc(0.15rem - 1px) calc(0.6rem - 1px);
+  }
+
+  /* Squad */
+  .squad-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .squad-grid h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 2px solid var(--color-blue);
+  }
+
+  .name-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .name-list li {
+    padding: 0.25rem 0;
+    font-size: 0.95rem;
+  }
+
+  .name-list.columns {
+    margin-top: 1rem;
+    columns: 200px auto;
+  }
+
+  /* Rankings */
+  .rank-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .rank-grid h3 {
+    font-size: 1.05rem;
+    margin-bottom: 0;
+  }
+</style>

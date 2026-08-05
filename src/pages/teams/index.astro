@@ -1,36 +1,26 @@
 ---
+// src/pages/teams/index.astro
+//
+// The four team cards. Names, slugs and blurbs come from src/lib/teams.js so
+// this page and /teams/[team].astro can never disagree about what a team is
+// called or where it lives. Only the photographs are chosen here, because they
+// have to be imported for Astro to optimise them.
+
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { Image } from 'astro:assets';
+import { TEAMS } from '../../lib/teams.js';
 import agmGame from '../../assets/agm-game-2024.jpg';
 import squad2022 from '../../assets/squad-2022.jpg';
 import squad2023 from '../../assets/squad-2023.jpg';
 
-const teams = [
-  {
-    slug: 'over-35s',
-    name: 'Over 35s',
-    blurb: 'Competing in the Cheshire & Wirral Football League Premier Division.',
-    image: agmGame,
-  },
-  {
-    slug: 'over-45s',
-    name: 'Over 45s',
-    blurb: 'Friendly and cup football across Merseyside, Wirral and Cheshire.',
-    image: squad2022,
-  },
-  {
-    slug: 'over-50s',
-    name: 'Over 50s',
-    blurb: 'Legends Cup and friendly fixtures for our most experienced squad.',
-    image: squad2023,
-  },
-  {
-    slug: 'open-age',
-    name: 'Open Age',
-    blurb: 'Playing as Sefton OA FC since the 2023/24 season.',
-    image: agmGame,
-  },
-];
+const photos = {
+  'over-35s': agmGame,
+  'over-45s': squad2022,
+  'over-50s': squad2023,
+  'open-age': agmGame,
+};
+
+const teams = TEAMS.map((t) => ({ ...t, image: photos[t.slug] ?? agmGame }));
 ---
 
 <BaseLayout title="Teams">
@@ -58,7 +48,6 @@ const teams = [
         </a>
       ))}
     </div>
-    <p class="note"><em>Individual team pages aren't built yet — these link out but are placeholders for now.</em></p>
   </section>
 </BaseLayout>
 
@@ -87,10 +76,5 @@ const teams = [
     height: 200px;
     object-fit: cover;
     display: block;
-  }
-
-  .note {
-    color: #64748b;
-    font-size: 0.9rem;
   }
 </style>
