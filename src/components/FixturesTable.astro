@@ -1,11 +1,13 @@
 ---
 // FixturesTable.astro
-// This component receives an array of fixture objects (matching the shape
-// in src/data/fixtures-2025-26.json) and renders them as a searchable,
-// sortable table with a "Download CSV" button.
+// This component receives an array of fixture objects — normally the output
+// of getSeason() from src/lib/season.js, which merges the fixture schedule
+// with filed match reports — and renders them as a searchable, sortable
+// table with a "Download CSV" button.
 //
 // Usage in a page:
-//   import fixtures from '../data/fixtures-2025-26.json';
+//   import { getSeason } from '../lib/season.js';
+//   const fixtures = await getSeason();
 //   <FixturesTable fixtures={fixtures} />
 
 interface Fixture {
@@ -18,6 +20,7 @@ interface Fixture {
   homeAway: string;
   outcome: string;
   type: string;
+  provisional?: boolean;
 }
 
 interface Props {
@@ -56,6 +59,7 @@ const rows = fixtures.map((f, i) => ({ ...f, _id: i }));
       <option value="Postponed">Postponed</option>
       <option value="Unknown">Unrecorded</option>
       <option value="Upcoming">Upcoming</option>
+      <option value="Awaited">Awaited</option>
     </select>
 
     <button id="fixtures-csv-export" type="button">Download CSV</button>
@@ -83,6 +87,7 @@ const rows = fixtures.map((f, i) => ({ ...f, _id: i }));
           data-venue={f.venue}
           data-date={f.date}
           data-outcome={f.outcome}
+          data-real={f.opponent && f.opponent.trim().toUpperCase() !== 'TBC' && !f.provisional ? 'yes' : 'no'}
           class={`outcome-${f.outcome.toLowerCase()}`}
         >
           <td>{new Date(f.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
@@ -116,6 +121,42 @@ const rows = fixtures.map((f, i) => ({ ...f, _id: i }));
 
   const allRows = Array.from(tbody.querySelectorAll('tr'));
 
+  // A fixture whose date has passed but which has no result filed still says
+  // "Upcoming", because that label was baked in when the site last built and
+  // the site only rebuilds when something changes. Relabel those in the
+  // browser, where "today" is always actually today.
+  //
+  // This deliberately mutates data-outcome as well as the badge text, so the
+  // filter, the column sort and the CSV export all pick it up for free.
+  //
+  // Rows marked data-real="no" are reserved dates with a TBC opponent — no
+  // match was arranged, so nobody owes a report and the badge is left alone.
+  function markAwaitedRows() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (const row of allRows) {
+      if (row.dataset.outcome !== 'Upcoming') continue;
+      if (row.dataset.real !== 'yes') continue;
+
+      const raw = row.dataset.date;
+      if (!raw) continue;
+
+      // Parse as local midnight. Passing the bare 'YYYY-MM-DD' string to the
+      // Date constructor would treat it as UTC and shift the day for anyone
+      // west of Greenwich.
+      const kickoff = new Date(raw + 'T00:00:00');
+      if (isNaN(kickoff.getTime()) || kickoff >= today) continue;
+
+      row.dataset.outcome = 'Awaited';
+      row.classList.remove('outcome-upcoming');
+      row.classList.add('outcome-awaited');
+
+      const badge = row.querySelector('.outcome-badge');
+      if (badge) badge.textContent = 'Awaited';
+    }
+  }
+
   function applyFilters() {
     const search = searchInput.value.trim().toLowerCase();
     const team = teamFilter.value;
@@ -140,6 +181,9 @@ const rows = fixtures.map((f, i) => ({ ...f, _id: i }));
 
     emptyMessage.hidden = visibleCount > 0;
   }
+
+  // Relabel before anything else reads the table.
+  markAwaitedRows();
 
   searchInput.addEventListener('input', applyFilters);
   teamFilter.addEventListener('change', applyFilters);
@@ -285,6 +329,15 @@ const rows = fixtures.map((f, i) => ({ ...f, _id: i }));
   .outcome-upcoming .outcome-badge {
     background: #e0e7ff;
     color: #2323e0;
+  }
+
+  /* Deliberately not a solid pill. Every other badge reports something that
+     happened; this one reports an absence, and should look like a gap. */
+  .outcome-awaited .outcome-badge {
+    background: transparent;
+    color: #b45309;
+    border: 1px dashed #f59e0b;
+    padding: calc(0.15rem - 1px) calc(0.6rem - 1px);
   }
 
   .outcome-postponed .outcome-badge {
