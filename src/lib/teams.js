@@ -14,25 +14,32 @@
 // anyone ever edits the team name in the spreadsheet, and every link into the
 // site would break at once. Explicit is safer.
 
+// `comp` is the short label for the tile; `blurb` is the sentence for the
+// team page. Two fields rather than one because a tile has room for four
+// words and a page header has room for a sentence.
 export const TEAMS = [
   {
     slug: 'over-35s',
     name: 'Over 35s',
+    comp: 'Cheshire & Wirral Premier',
     blurb: 'Competing in the Cheshire & Wirral Football League Premier Division.',
   },
   {
     slug: 'over-45s',
     name: 'Over 45s',
+    comp: 'Friendlies & cup',
     blurb: 'Friendly and cup football across Merseyside, Wirral and Cheshire.',
   },
   {
     slug: 'over-50s',
     name: 'Over 50s',
+    comp: 'Legends Cup',
     blurb: 'Legends Cup and friendly fixtures for our most experienced squad.',
   },
   {
     slug: 'open-age',
     name: 'Open Age',
+    comp: 'Sefton OA FC',
     blurb: 'Playing as Sefton OA FC since the 2023/24 season.',
   },
 ];

@@ -109,7 +109,46 @@ async function loadSquads(fallback) {
     return safe;
   }
 }
+/**
+ * Who manages each team, from the Managers tab. Used for the default on the
+ * match report form and the name on the team tiles.
+ *
+ * No local fallback file on purpose: an unreachable feed means a tile with no
+ * manager line, which looks fine. A stale hardcoded list would be worse — it
+ * would name the wrong man with total confidence.
+ */
+let pendingManagers = null;
+let managersFetchedAt = 0;
 
+export async function getManagers() {
+  if (!pendingManagers || Date.now() - managersFetchedAt > CACHE_MS) {
+    managersFetchedAt = Date.now();
+    pendingManagers = loadManagers();
+  }
+  return pendingManagers;
+}
+
+async function loadManagers() {
+  if (!RESULTS_FEED) {
+    console.warn('[season] RESULTS_FEED not set — no manager names.');
+    return {};
+  }
+  try {
+    const url = RESULTS_FEED.replace('feed=results', 'feed=managers');
+    const res = await fetch(url, { redirect: 'follow' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok || !data.managers) throw new Error(data.error || 'Unexpected response');
+
+    const total = Object.values(data.managers).reduce((n, l) => n + l.length, 0);
+    console.log('[season] Managers: ' + total + ' across ' +
+                Object.keys(data.managers).length + ' teams.');
+    return data.managers;
+  } catch (err) {
+    console.warn('[season] Could not load managers: ' + err.message);
+    return {};
+  }
+}
 /**
  * The fixture list, from the Fixtures tab in the spreadsheet — the list you
  * actually maintain. `fixtures-2026-27.json` is only a fallback for when the

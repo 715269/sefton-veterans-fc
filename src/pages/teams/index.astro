@@ -1,35 +1,60 @@
 ---
 // src/pages/teams/index.astro
 //
-// The four team cards. Names, slugs and blurbs come from src/lib/teams.js so
-// this page and /teams/[team].astro can never disagree about what a team is
-// called or where it lives. Only the photographs are chosen here, because they
-// have to be imported for Astro to optimise them.
+// Four tiles, built from data rather than photographs. Each carries the age
+// group as a numeral, the competition, who manages the side, and the last five
+// results.
 //
-// Filenames are lowercase with hyphens on purpose. Windows treats 'Open Age.png'
-// and 'open-age.png' as the same file; Netlify's Linux builder does not, so a
-// capital or a space here builds fine locally and 404s live.
+// The form row is the reason these tiles exist rather than being plain links:
+// the team pages show one side in depth and the fixtures table is a list, but
+// nowhere else on the site can you see all four sides at once. That is a
+// different job, not a repeat of one already done.
 
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { Image } from 'astro:assets';
 import { TEAMS } from '../../lib/teams.js';
-import over35s from '../../assets/over-35s.jpg';
-import over50s from '../../assets/over-50s.jpg';
-import openAge from '../../assets/open-age.png';
-import squad2022 from '../../assets/squad-2022.jpg';
-import agmGame from '../../assets/agm-game-2024.jpg';
+import { getSummary, getManagers } from '../../lib/season.js';
 
-// Over 45s keeps the 2022 photo until a newer one turns up. agmGame is the
-// whole club rather than any one side, so it is only the last resort for a
-// team added to teams.js before anyone has taken its picture.
-const photos = {
-  'over-35s': over35s,
-  'over-45s': squad2022,
-  'over-50s': over50s,
-  'open-age': openAge,
-};
+const managers = await getManagers();
 
-const teams = TEAMS.map((t) => ({ ...t, image: photos[t.slug] ?? agmGame }));
+const tiles = await Promise.all(
+  TEAMS.map(async (t) => {
+    const summary = await getSummary(t.name);
+
+    // Oldest on the left, newest on the right — the same order as the form
+    // string on the team pages, so the two can never contradict each other.
+    // Padded to five so every tile has the same rhythm in August.
+    const form = summary.form.slice(-5);
+    const dots = [
+      ...form,
+      ...Array(Math.max(0, 5 - form.length)).fill(null),
+    ];
+
+    return { ...t, dots, played: summary.played };
+  })
+);
+
+// Names are stored "Surname, Forename". Right for sorting, wrong for reading.
+function readable(raw) {
+  const parts = String(raw).split(',');
+  if (parts.length !== 2) return String(raw).trim();
+  return `${parts[1].trim()} ${parts[0].trim()}`;
+}
+
+function managerLine(team) {
+  const list = (managers[team] ?? []).map(readable);
+  if (list.length === 0) return null;
+  if (list.length === 1) return { label: 'Manager', names: list[0] };
+  return { label: 'Managers', names: list.join(' & ') };
+}
+
+const OUTCOME_WORD = { W: 'won', D: 'drew', L: 'lost' };
+
+function formSentence(dots) {
+  const played = dots.filter(Boolean);
+  if (played.length === 0) return 'No matches played yet this season.';
+  return 'Recent form, oldest first: ' +
+    played.map((d) => OUTCOME_WORD[d] ?? d).join(', ') + '.';
+}
 ---
 
 <BaseLayout title="Teams">
@@ -41,21 +66,41 @@ const teams = TEAMS.map((t) => ({ ...t, image: photos[t.slug] ?? agmGame }));
   </section>
 
   <section class="section-padded container">
-    <div class="card-grid">
-      {teams.map((team) => (
-        <a href={`/teams/${team.slug}`} class="card">
-          <Image
-            src={team.image}
-            alt={`${team.name} team photo`}
-            width={600}
-            height={450}
-          />
-          <div class="card-body">
-            <h3>{team.name}</h3>
-            <p>{team.blurb}</p>
-          </div>
-        </a>
-      ))}
+    <div class="tile-grid">
+      {tiles.map((team) => {
+        const mgr = managerLine(team.name);
+        return (
+          <a class="tile" href={`/teams/${team.slug}`}>
+            <span class="stripes" aria-hidden="true"></span>
+            <span class="glow" aria-hidden="true"></span>
+            <span class="numeral" aria-hidden="true">
+              {team.slug === 'open-age' ? 'OA' : team.name.replace(/\D/g, '')}
+            </span>
+
+            <span class="head">
+              <span class="name">{team.name}</span>
+              <span class="comp">{team.comp}</span>
+            </span>
+
+            <span class="foot">
+              {mgr && (
+                <span class="mgr">
+                  <span class="mgr-label">{mgr.label}</span>
+                  <span class="mgr-name">{mgr.names}</span>
+                </span>
+              )}
+
+              <span class="form" role="img" aria-label={formSentence(team.dots)}>
+                {team.dots.map((d) => (
+                  <span class={`dot ${d ? d.toLowerCase() : 'none'}`} aria-hidden="true">
+                    {d ?? ''}
+                  </span>
+                ))}
+              </span>
+            </span>
+          </a>
+        );
+      })}
     </div>
   </section>
 </BaseLayout>
@@ -77,14 +122,160 @@ const teams = TEAMS.map((t) => ({ ...t, image: photos[t.slug] ?? agmGame }));
     margin: 0;
   }
 
-  /* The source photos vary in shape, but the cards want a consistent band.
-     Astro resizes at the ratio given above and the crop happens here, because
-     handing Astro a mismatched width/height squashes the picture instead of
-     cropping it. */
-  .card img {
-    width: 100%;
-    height: 200px;
-    object-fit: cover;
+  .tile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1rem;
+  }
+
+  .tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 1rem;
+    text-decoration: none;
+    background: var(--color-navy);
+    border-radius: 12px;
+    padding: 1.4rem 1.25rem 1.15rem;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    isolation: isolate;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+
+  .tile:hover,
+  .tile:focus-visible {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.22);
+  }
+
+  .tile:focus-visible {
+    outline: 3px solid var(--color-blue);
+    outline-offset: 3px;
+  }
+
+  /* A nod to a striped shirt, not a reproduction of one — the teams don't all
+     play in the same kit, so anything more literal would be wrong for three
+     of the four. */
+  .stripes {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background: repeating-linear-gradient(
+      100deg,
+      rgba(255, 255, 255, 0.035) 0 20px,
+      rgba(255, 255, 255, 0) 20px 40px
+    );
+  }
+
+  .glow {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background: radial-gradient(
+      130% 80% at 78% 8%,
+      rgba(35, 35, 224, 0.42) 0%,
+      rgba(35, 35, 224, 0) 60%
+    );
+  }
+
+  /* Ghosted so the words stay first. The numeral is identity, not headline. */
+  .numeral {
+    position: absolute;
+    right: -0.08em;
+    bottom: -0.3em;
+    z-index: -1;
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 10.5rem;
+    line-height: 1;
+    letter-spacing: -0.06em;
+    color: transparent;
+    -webkit-text-stroke: 2px rgba(255, 255, 255, 0.17);
+    pointer-events: none;
+  }
+
+  /* "OA" is two letters where the others are two digits, so it needs pulling
+     back or it crowds the tile. */
+  .tile[href$='open-age'] .numeral {
+    font-size: 7rem;
+    right: 0.01em;
+    bottom: -0.22em;
+  }
+
+  .head {
     display: block;
+  }
+
+  .name {
+    display: block;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.3rem;
+    color: white;
+    letter-spacing: -0.01em;
+  }
+
+  .comp {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.82rem;
+    color: #94a3b8;
+  }
+
+  .foot {
+    display: block;
+  }
+
+  .mgr {
+    display: block;
+    margin-bottom: 0.7rem;
+    line-height: 1.35;
+  }
+
+  .mgr-label {
+    display: block;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #64748b;
+  }
+
+  .mgr-name {
+    display: block;
+    font-size: 0.85rem;
+    color: #cbd5e1;
+  }
+
+  .form {
+    display: flex;
+    gap: 0.28rem;
+  }
+
+  .dot {
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    font-weight: 700;
+  }
+
+  .dot.w { background: #22c55e; color: #052e16; }
+  .dot.d { background: #eab308; color: #422006; }
+  .dot.l { background: #ef4444; color: #450a0a; }
+
+  /* Dashed rather than filled grey: "not played yet" reads as a gap waiting
+     to be filled, where a grey disc reads as something broken. */
+  .dot.none {
+    background: transparent;
+    border: 1px dashed rgba(255, 255, 255, 0.18);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tile { transition: none; }
   }
 </style>

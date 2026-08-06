@@ -3,7 +3,7 @@
 // writes to the same spreadsheet via the Apps Script web app.
 import BaseLayout from '../layouts/BaseLayout.astro';
 import players from '../data/players.json';
-import { getSquads, getSeason, getPositions, getFixtures } from '../lib/season.js';
+import { getSquads, getSeason, getPositions, getFixtures, getManagers } from '../lib/season.js';
 // The fixture list comes from the Fixtures tab in the spreadsheet, falling
 // back to the local file if the feed is unreachable.
 const FIXTURES = await getFixtures();
@@ -16,6 +16,10 @@ const squads = await getSquads(players);
 // Each player's usual position, learned from previous reports, so a captain
 // only has to set it once rather than every week.
 const POSITIONS = await getPositions();
+
+// Who normally manages each side, from the Managers tab. Only a default — the
+// report records who was actually there on the day.
+const MANAGERS = await getManagers();
 
 // Which fixtures already have a report, so a captain can be told before he
 // files a second one over the top of it.
@@ -67,6 +71,13 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     <div class="mr-field">
       <label class="mr-label" for="mr-captain">Your name</label>
       <input type="text" id="mr-captain" autocomplete="name" enterkeyhint="next" />
+    </div>
+
+    <div class="mr-field" id="mr-manager-field" hidden>
+      <span class="mr-label" id="lbl-manager">Who was in charge?</span>
+      <div class="mr-choices" id="mr-managers" role="group" aria-labelledby="lbl-manager"></div>
+      <select id="mr-manager-add" class="mr-standin"></select>
+      <span class="mr-hint">The usual manager is already on. Tap to turn off if they weren't there, and add a stand-in from the list.</span>
     </div>
 
     <div id="mr-manual">
@@ -190,7 +201,7 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
 </div>
 </BaseLayout>
 
-<script is:inline define:vars={{ SQUADS: squads, FIXTURES, FILED, POSITIONS, ENDPOINT, SHARED_SECRET }}>
+<script is:inline define:vars={{ SQUADS: squads, FIXTURES, FILED, POSITIONS, MANAGERS, ENDPOINT, SHARED_SECRET }}>
   /* Expects: SQUADS, FIXTURES, FILED, POSITIONS, ENDPOINT, SHARED_SECRET */
 
   var TEAM_ORDER = ['Over 35s', 'Over 45s', 'Over 50s', 'Open Age'];
@@ -209,6 +220,7 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     reportId: newId(),
     team: '',
     captain: '',
+    managers: [],
     opponent: '',
     homeAway: '',
     matchDate: new Date().toISOString().slice(0, 10),
@@ -499,11 +511,13 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     }
     state.team = team;
     state.fixtureKey = '';
+    state.managers = defaultManagers(team);
     Array.prototype.forEach.call($('mr-teams').children, function (b) {
       b.setAttribute('aria-pressed', String(b.getAttribute('data-team') === team));
     });
     buildFixtures();
     buildSquad();
+    renderManagers();
     saveDraft();
   }
 
@@ -526,6 +540,85 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     $('mr-score-for').textContent = state.scoreFor;
     $('mr-score-against').textContent = state.scoreAgainst;
     $('mr-them-label').textContent = state.opponent ? state.opponent : 'Opponent';
+  }
+
+  /* ---------------- who was in charge ---------------- */
+
+  function defaultManagers(team) {
+    return ((MANAGERS && MANAGERS[team]) || []).slice();
+  }
+
+  /* Everyone who could plausibly have stood in: this team's roster, plus every
+     manager at the club. A manager covering for another side is the likeliest
+     stand-in there is, and he may not be a registered player anywhere. */
+  function standInOptions() {
+    var seen = {};
+    var out = [];
+    function add(n) {
+      var k = String(n).toLowerCase();
+      if (!n || seen[k]) return;
+      seen[k] = true;
+      out.push(n);
+    }
+    squadFor(state.team).forEach(add);
+    Object.keys(MANAGERS || {}).forEach(function (t) {
+      (MANAGERS[t] || []).forEach(add);
+    });
+    return out.sort(function (a, b) {
+      return a.toLowerCase() < b.toLowerCase() ? -1 : 1;
+    });
+  }
+
+  function renderManagers() {
+    var field = $('mr-manager-field');
+    if (!state.team) { field.hidden = true; return; }
+    field.hidden = false;
+
+    /* The team's usual managers plus anyone already picked, so turning someone
+       off leaves his name on screen to turn back on. */
+    var shown = defaultManagers(state.team);
+    state.managers.forEach(function (n) {
+      if (shown.indexOf(n) === -1) shown.push(n);
+    });
+
+    var wrap = $('mr-managers');
+    wrap.innerHTML = '';
+    shown.forEach(function (name) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mr-choice';
+      b.setAttribute('data-manager', name);
+      b.setAttribute('aria-pressed', String(state.managers.indexOf(name) !== -1));
+      b.textContent = readableName(name);
+      wrap.appendChild(b);
+    });
+
+    var sel = $('mr-manager-add');
+    sel.innerHTML = '';
+    var first = document.createElement('option');
+    first.value = '';
+    first.textContent = 'Someone stood in\u2026';
+    sel.appendChild(first);
+    standInOptions().forEach(function (name) {
+      if (shown.indexOf(name) !== -1) return;
+      var o = document.createElement('option');
+      o.value = name;
+      o.textContent = readableName(name);
+      sel.appendChild(o);
+    });
+  }
+
+  function toggleManager(name) {
+    var i = state.managers.indexOf(name);
+    if (i === -1) state.managers.push(name); else state.managers.splice(i, 1);
+    renderManagers();
+    saveDraft();
+  }
+
+  function addStandIn(name) {
+    if (name && state.managers.indexOf(name) === -1) state.managers.push(name);
+    renderManagers();
+    saveDraft();
   }
 
   /* ---------------- step 2 ---------------- */
@@ -1083,6 +1176,7 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
       reportId: state.reportId,
       submittedAt: new Date().toISOString(),
       captain: state.captain,
+      managers: state.managers,
       team: state.team,
       opponent: state.opponent,
       homeAway: state.homeAway,
@@ -1208,6 +1302,10 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     buildFixtures();
     renderScore();
     buildSquad();
+    /* Back to the team's usual managers — a stand-in last week is not a
+       stand-in this week. */
+    state.managers = defaultManagers(state.team);
+    renderManagers();
     goTo(1);
   }
 
@@ -1225,6 +1323,20 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     buildFixtures();
     renderScore();
     buildSquad();
+
+    /* A draft saved before this field existed has no managers array. */
+    if (!Array.isArray(state.managers)) state.managers = [];
+    renderManagers();
+
+    $('mr-managers').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-manager]');
+      if (b) toggleManager(b.getAttribute('data-manager'));
+    });
+
+    $('mr-manager-add').addEventListener('change', function () {
+      addStandIn(this.value);
+      this.value = '';
+    });
 
     $('mr-teams').addEventListener('click', function (e) {
       var b = e.target.closest('[data-team]');
@@ -1437,6 +1549,11 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     font-size: 0.95rem;
     color: var(--navy);
     margin: 0 0 0.45rem;
+  }
+
+  .mr-standin {
+    margin-top: 0.5rem;
+    width: 100%;
   }
 
   .mr-hint {

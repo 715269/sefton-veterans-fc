@@ -19,6 +19,7 @@ import {
   getSquads,
   getPositions,
   getStatsByTeam,
+  getManagers,
 } from '../../lib/season.js';
 
 export function getStaticPaths() {
@@ -31,14 +32,17 @@ export function getStaticPaths() {
 const { entry } = Astro.props;
 const name = entry.name;
 
-const [season, summary, results, squads, positions, statsByTeam] = await Promise.all([
+const [season, summary, results, squads, positions, statsByTeam, managers] = await Promise.all([
   getSeason(),
   getSummary(name),
   getResults(name),
   getSquads(players),
   getPositions(),
   getStatsByTeam(),
+  getManagers(),
 ]);
+
+const teamManagers = managers[name] ?? [];
 
 /* ---------------- fixtures still to come ----------------
    Deliberately not getUpcoming(). That filters on the date at BUILD time, so a
@@ -128,6 +132,12 @@ const FORM_WORDS = { W: 'Win', D: 'Draw', L: 'Loss' };
       <p class="eyebrow"><a href="/teams">Teams</a></p>
       <h1>{name}</h1>
       <p>{entry.blurb}</p>
+      {teamManagers.length > 0 && (
+        <p class="managed-by">
+          {teamManagers.length === 1 ? 'Manager' : 'Managers'}
+          <span> · {teamManagers.map(readable).join(' & ')}</span>
+        </p>
+      )}
     </div>
   </section>
 
@@ -400,6 +410,21 @@ const FORM_WORDS = { W: 'Win', D: 'Draw', L: 'Loss' };
   .hero-band p {
     color: #cbd5e1;
     margin: 0;
+  }
+
+  .managed-by {
+    margin: 0.75rem 0 0;
+    font-size: 0.85rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .managed-by span {
+    color: #cbd5e1;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 0.95rem;
   }
 
   .eyebrow {

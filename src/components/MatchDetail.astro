@@ -334,6 +334,17 @@ const MATCHES = fixtures
 
     var foot = $('md-foot');
     foot.innerHTML = '';
+
+    /* Who was in charge on the day, which is not always the man on the
+       Managers tab — the whole reason it is recorded per match. */
+    if (detail.managers && detail.managers.length) {
+      var mgr = el('span', 'md-managers');
+      mgr.appendChild(document.createTextNode(
+        detail.managers.length > 1 ? 'Managers ' : 'Manager '));
+      mgr.appendChild(el('strong', null, detail.managers.map(readable).join(' & ')));
+      foot.appendChild(mgr);
+    }
+
     if (detail.captain || detail.submittedAt) {
       var line = el('span');
       if (detail.captain) {
@@ -816,6 +827,8 @@ const MATCHES = fixtures
   }
 
   .md-foot strong { color: var(--md-navy); font-weight: 600; }
+
+  .md-managers { display: block; margin-bottom: 0.25rem; }
 
   /* ---------- Desktop: a side panel instead ---------- */
 
