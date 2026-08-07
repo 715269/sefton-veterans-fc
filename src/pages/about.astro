@@ -1,16 +1,164 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 
+// Trophies, grouped by competition rather than listed by season. Six wins in
+// one cup is the story; six separate rows of a table hides it.
+const honours = [
+  {
+    competition: 'Friendship Cup',
+    seasons: ['2018/19', '2019/20', '2020/21', '2021/22', '2023/24', '2024/25'],
+  },
+  {
+    competition: 'Friendship Masters Cup',
+    seasons: ['2021/22'],
+  },
+];
+
+// The four awards, in the order they're presented on the night.
+const AWARDS = [
+  ['scorer', 'Top Scorer'],
+  ['players', "Players' Player of the Year"],
+  ['managers', "Managers' Player of the Year"],
+  ['clubman', 'Gerry Kinsella Clubman of the Year'],
+];
+
+// Each winner is [name, team, note]. Team and note are optional — before
+// 2021/22 the club ran one side, so those seasons have a single winner with
+// no team against it, which is correct rather than missing.
+//
+// Newest first. Add a new block at the top each summer.
+const rollOfHonour = [
+  {
+    season: '2025/26',
+    scorer: [['Karl Bergqvist', '35s'], ['Paul Smith', '45s']],
+    players: [['Karl Bergqvist', '35s'], ['Mick Shannon', '45s']],
+    managers: [['Karl Bergqvist', '35s'], ['Jay Curran', '45s']],
+    clubman: [['Geoff McKeating']],
+  },
+  {
+    season: '2024/25',
+    scorer: [['Lee Reid', '35s'], ['Paul McKendrick', '45s']],
+    players: [['Neil McQueen', '35s', 'joint'], ['Tony James', '35s', 'joint'], ['Gary Brookes', '45s']],
+    managers: [['Jamie Hay', '35s'], ['Chris Long', '45s']],
+    clubman: [['David Stafford']],
+  },
+  {
+    season: '2023/24',
+    scorer: [['Lee Reid', '35s'], ['Rob Cowley', '45s']],
+    players: [["Danny O'Connor", '35s'], ['Ste McNulty', '45s']],
+    managers: [['Mark Shildhauer', '35s'], ['Joe McNally', '45s']],
+    clubman: [['Dave Sellick']],
+  },
+  {
+    season: '2022/23',
+    scorer: [['Lee Reid', '35s'], ['Rob Cowley', '45s']],
+    players: [['Thomas King', '35s'], ['Steve King', '45s']],
+    managers: [['David Stafford', '35s'], ['Ste Byrne', '45s']],
+    clubman: [['Geoff McKeating']],
+  },
+  {
+    season: '2021/22',
+    scorer: [['Lee Reid', '35s'], ['Rob Cowley', '45s']],
+    players: [['Lee Reid', '35s'], ['Rob Cowley', '45s']],
+    managers: [['Chris Long', '35s'], ['Rob Cowley', '45s']],
+    clubman: [['Alan Roberts']],
+  },
+  {
+    season: '2020/21',
+    scorer: [['Lee Reid']],
+    players: [['Dave Parkinson']],
+    managers: [['Joe McNally']],
+    clubman: [['Gerard Kinsella']],
+  },
+  {
+    season: '2019/20',
+    scorer: [['Dave Parkinson']],
+    players: [['Dave Parkinson']],
+    managers: [['Warren Jones']],
+    clubman: [['Brian Gilligan']],
+  },
+  {
+    season: '2018/19',
+    scorer: [['Dave Parkinson']],
+    players: [['Ste King']],
+    managers: [['Carl Brennand']],
+    clubman: [['The Club']],
+  },
+  {
+    season: '2017/18',
+    scorer: [['Mark Shildhauer']],
+    players: [['Mark Shildhauer']],
+    managers: [['Chris Long']],
+    clubman: [['Chris Long']],
+  },
+  {
+    season: '2016/17',
+    scorer: [['Mark Shildhauer']],
+    players: [['Wayne Robinson']],
+    managers: [['Gary McBirnie']],
+    clubman: [['Wayne Robinson']],
+  },
+  {
+    season: '2015/16',
+    scorer: [['Gary Roberts']],
+    players: [['Jay Shannon']],
+    managers: [['Jay Shannon']],
+    clubman: [['Brian Gilligan']],
+  },
+  {
+    season: '2014/15',
+    scorer: [['Jamie Byron']],
+    players: [['Jamie Byron']],
+    managers: [['Mike Jump']],
+    clubman: [['Jay Shannon']],
+  },
+  {
+    season: '2013/14',
+    scorer: [['Mannie Penzie']],
+    players: [['Chris Long']],
+    managers: [['Gerard Kinsella']],
+    clubman: [['Joe Lundon']],
+  },
+  {
+    season: '2012/13',
+    scorer: [['Paul Jordan']],
+    players: [['Jay Shannon']],
+    managers: [['Wayne Robinson']],
+    clubman: [['Gerard Kinsella']],
+  },
+  {
+    season: '2011/12',
+    scorer: [['Les Ash']],
+    players: [['Chris McGunigle']],
+    managers: [['Dave Scanlan']],
+    clubman: [['Mark Williams']],
+  },
+];
+
 const committee = [
   { role: 'Chairman', name: 'Geoff McKeating' },
   { role: 'Secretary/Treasurer', name: 'Gerard Kinsella' },
-  { role: '+35 Fixtures', name: 'Robbie Halpin' },
-  { role: '+45 Fixtures', name: 'Brian Gilligan' },
+  { role: 'Over 35s Fixtures', name: 'Robbie Halpin' },
+  { role: 'Over 45s & 50s Fixtures', name: 'Brian Gilligan' },
   { role: 'Social Secretary', name: 'Alan Roberts' },
-  { role: 'Member', name: 'Paul Jordan' },
   { role: 'Member', name: 'Fran Armstrong' },
   { role: 'Member', name: 'Chris Long' },
   { role: 'Member', name: 'Gary Brookes' },
+];
+
+// Kept separate from the committee rather than run together as one long grid:
+// seventeen cards in a single block is a wall, and these are a different kind
+// of role — matchday rather than club administration.
+const teamRoles = [
+  { role: 'Club Captain', name: 'Jay Shannon' },
+  { role: 'Over 35s Manager', name: 'David Stafford' },
+  { role: 'Over 35s Captain', name: 'Thomas King' },
+  { role: 'Over 45s Manager', name: 'Gary McQueen' },
+  { role: 'Over 50s Manager', name: 'Paul McKendrick' },
+  { role: 'Open Age Manager', name: 'Tom Furnival' },
+  { role: 'Open Age Manager', name: 'Antony Hathaway' },
+  { role: 'Open Age Captain', name: 'John McGunigle' },
+  { role: 'Open Age Treasurer', name: 'Ash Stott' },
 ];
 ---
 
@@ -59,20 +207,69 @@ const committee = [
           </div>
         ))}
       </div>
+
+      <h3 class="group-heading">Team Management</h3>
+      <div class="card-grid">
+        {teamRoles.map((person) => (
+          <div class="card committee-card">
+            <div class="card-body">
+              <h3>{person.name}</h3>
+              <p>{person.role}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   </section>
 
   <section class="section-padded container">
     <h2>Honours Board</h2>
-    <p><em>Placeholder — add league titles, cup wins, and awards here.</em></p>
-    <table class="honours-table">
-      <thead>
-        <tr><th>Season</th><th>Honour</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>—</td><td>—</td></tr>
-      </tbody>
-    </table>
+
+    <div class="honours-grid">
+      {honours.map((h) => (
+        <article class="honour-trophy">
+          <p class="trophy-count">
+            <span class="trophy-num">{h.seasons.length}</span>
+            <span class="trophy-times">{h.seasons.length === 1 ? 'win' : 'wins'}</span>
+          </p>
+          <h3>{h.competition}</h3>
+          <ul class="trophy-seasons">
+            {h.seasons.map((s) => <li>{s}</li>)}
+          </ul>
+        </article>
+      ))}
+    </div>
+  </section>
+  <section class="section-padded container">
+    <h2>Roll of Honour</h2>
+    <p class="roll-intro">
+      Season by season since 2011/12. Where two names share an award, the club
+      was fielding more than one side that year.
+    </p>
+
+    <div class="roll-grid">
+      {rollOfHonour.map((year, i) => (
+        <article class={`roll-card${i === 0 ? ' is-current' : ''}`}>
+          <h3 class="roll-season">{year.season}</h3>
+          <dl class="roll-list">
+            {AWARDS.map(([key, label]) => (
+              <div class="roll-row">
+                <dt>{label}</dt>
+                <dd>
+                  {year[key].map(([name, team, note]) => (
+                    <span class="winner">
+                      <span class="winner-name">{name}</span>
+                      {team && <span class="team-tag">{team}</span>}
+                      {note && <span class="winner-note">{note}</span>}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </article>
+      ))}
+    </div>
   </section>
 </BaseLayout>
 
@@ -93,6 +290,12 @@ const committee = [
     margin: 0;
   }
 
+  .group-heading {
+    color: white;
+    margin: 2.5rem 0 1rem;
+    font-size: 1.35rem;
+  }
+
   .committee-card {
     background: white;
   }
@@ -110,21 +313,150 @@ const committee = [
     letter-spacing: 0.03em;
   }
 
-  .honours-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 1rem;
+  .honours-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    margin-top: 1.25rem;
   }
 
-  .honours-table th {
-    background: var(--color-navy);
-    color: white;
-    text-align: left;
-    padding: 0.6rem 0.9rem;
+  .honour-trophy {
+    border: 1px solid #e2e8f0;
+    border-top: 4px solid var(--color-blue);
+    border-radius: 10px;
+    padding: 1.25rem;
+    background: white;
   }
 
-  .honours-table td {
-    padding: 0.6rem 0.9rem;
+  .trophy-count {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    margin: 0 0 0.15rem;
+  }
+
+  .trophy-num {
+    font-family: var(--font-heading);
+    font-size: 2.6rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--color-navy);
+    letter-spacing: -0.03em;
+  }
+
+  .trophy-times {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+  }
+
+  .honour-trophy h3 {
+    margin: 0 0 0.75rem;
+    font-size: 1.1rem;
+    color: var(--color-navy);
+  }
+
+  .trophy-seasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .trophy-seasons li {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-blue);
+    background: #e0e7ff;
+    border-radius: 999px;
+    padding: 0.15rem 0.6rem;
+  }
+
+  .roll-intro {
+    color: #64748b;
+    max-width: 62ch;
+    margin-bottom: 1.5rem;
+  }
+
+  .roll-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 1rem;
+  }
+
+  .roll-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1.1rem 1.15rem 1.25rem;
+    background: white;
+  }
+
+  /* The current season gets the club blue down its edge — one card marked,
+     not a different colour scheme, so the archive still reads as one set. */
+  .roll-card.is-current {
+    border-left: 4px solid var(--color-blue);
+    background: #f8fafc;
+  }
+
+  .roll-season {
+    font-size: 1.15rem;
+    margin: 0 0 0.85rem;
+    padding-bottom: 0.5rem;
     border-bottom: 1px solid #e2e8f0;
+    color: var(--color-navy);
+  }
+
+  .roll-list {
+    margin: 0;
+  }
+
+  .roll-row + .roll-row {
+    margin-top: 0.75rem;
+  }
+
+  .roll-row dt {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    margin-bottom: 0.2rem;
+  }
+
+  .roll-row dd {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .winner {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+  }
+
+  .winner-name {
+    font-weight: 600;
+    color: var(--color-navy);
+    font-size: 0.95rem;
+  }
+
+  .team-tag {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--color-blue);
+    background: #e0e7ff;
+    border-radius: 999px;
+    padding: 0.05rem 0.45rem;
+    white-space: nowrap;
+  }
+
+  .winner-note {
+    font-size: 0.72rem;
+    color: #64748b;
+    font-style: italic;
   }
 </style>
