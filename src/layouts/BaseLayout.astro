@@ -63,6 +63,10 @@ const navLinks = [
           <span class="brand-name">Sefton Veterans FC</span>
         </a>
 
+        <button id="pwa-install-btn" class="install-btn" hidden>
+          Install app
+        </button>
+
         <button id="nav-toggle" class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
           <span></span>
           <span></span>
@@ -116,6 +120,44 @@ const navLinks = [
           });
         });
       }
+
+      // Chrome decides installability on its own timing — a new visitor can
+      // meet every technical requirement (valid manifest, active service
+      // worker) and still not be offered "Install app" in the menu for
+      // several visits, because Chrome also wants evidence of a returning,
+      // engaged visitor before it surfaces the option itself.
+      //
+      // Rather than wait for that, this captures Chrome's install event the
+      // moment it fires, holds onto it, and reveals a button that triggers
+      // the exact same native install dialog directly — no extra visits
+      // needed. The button never appears at all on browsers that don't
+      // support the install prompt, iOS Safari included, since that event
+      // simply never fires there — which is also why Safari always needs
+      // the manual Share → Add to Home Screen route instead.
+      let deferredInstallPrompt = null;
+      const installBtn = document.getElementById('pwa-install-btn');
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        if (installBtn) installBtn.hidden = false;
+      });
+
+      installBtn?.addEventListener('click', async () => {
+        if (!deferredInstallPrompt) return;
+        installBtn.hidden = true;
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+      });
+
+      // Once installed, Chrome won't fire beforeinstallprompt again this
+      // session, but the button could still be showing from before the
+      // person acted on it — hide it so it doesn't linger uselessly.
+      window.addEventListener('appinstalled', () => {
+        if (installBtn) installBtn.hidden = true;
+        deferredInstallPrompt = null;
+      });
     </script>
   </body>
 </html>
@@ -289,6 +331,35 @@ const navLinks = [
     font-weight: 700;
     color: white;
     font-size: 1.15rem;
+  }
+
+  /* Hidden by default via the `hidden` attribute in the markup — JS reveals
+     this only once Chrome actually confirms the site is installable, so it
+     never sits there as a dead button on browsers that can't act on it. */
+  .install-btn {
+    display: none;
+    align-items: center;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: white;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  .install-btn:not([hidden]) {
+    display: inline-flex;
+  }
+
+  .install-btn:hover,
+  .install-btn:focus-visible {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: white;
   }
 
   .nav-toggle {
