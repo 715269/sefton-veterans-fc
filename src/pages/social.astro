@@ -1,8 +1,36 @@
 ---
+// src/pages/social.astro
+//
+// Three things fixed here alongside the games teaser the person actually
+// asked for:
+//   1. The photos were loading from the old Zyro CDN, which stops resolving
+//      the day Hostinger is switched off. Swapped for local assets.
+//   2. The "Player Registration — Coming soon" section was wrong the moment
+//      /register went live. Replaced with a link to it.
+//   3. A leftover "Placeholder" line nobody had removed.
+
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { Image } from 'astro:assets';
 import agmGame from '../assets/agm-game-2024.jpg';
 import squad2022 from '../assets/squad-2022.jpg';
+import squad2023 from '../assets/squad-2023.jpg';
+
+// Add a fourth entry the day any of these actually comes back, or add a new
+// one entirely — nothing else on the page needs to change.
+const games = [
+  {
+    name: 'World Cup Predictions',
+    blurb: 'Pick your scores, top the table, bragging rights all tournament.',
+  },
+  {
+    name: 'Bonus Ball',
+    blurb: "Weekly draw tied to Saturday's football scores.",
+  },
+  {
+    name: 'Golden Goal',
+    blurb: 'Guess the minute, win the pot.',
+  },
+];
 ---
 
 <BaseLayout title="Social">
@@ -16,22 +44,40 @@ import squad2022 from '../assets/squad-2022.jpg';
   <section class="section-padded container">
     <h2>Club Life</h2>
     <div class="photo-grid">
-      <Image src={agmGame} alt="Sefton Veterans FC social event" width={700} />
-      <Image src={squad2022} alt="Sefton Veterans FC players" width={700} />
+      <Image src={agmGame} alt="Sefton Veterans FC match action" width={700} height={500} />
+      <Image src={squad2022} alt="Sefton Veterans FC players" width={700} height={500} />
+      <Image src={squad2023} alt="Sefton Veterans FC on the pitch" width={700} height={500} />
     </div>
-    <p><em>Placeholder — add upcoming social events and news here.</em></p>
   </section>
 
-  <section class="section-navy section-padded">
+  <section class="section-light section-padded">
     <div class="container">
-      <h2>Player Registration</h2>
-      <p>
-        Placeholder — the player registration form needs to be rebuilt here.
-        Since Astro pages are static by default, this form will need a way
-        to actually receive submissions (e.g. a form service like Formspree,
-        or a small serverless function). Let's tackle that as its own step.
+      <h2>Club Games</h2>
+      <p class="games-intro">
+        World Cup Predictions, Bonus Ball, Golden Goal — the club's run all
+        three over the years. They're paused for now, but the trophy cabinet
+        isn't going anywhere.
       </p>
-      <a href="/social" class="btn btn-outline">Coming soon</a>
+
+      <div class="game-grid">
+        {games.map((game) => (
+          <article class="game-card">
+            <span class="game-badge">Returning soon</span>
+            <h3>{game.name}</h3>
+            <p>{game.blurb}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section-padded container">
+    <div class="cta-band">
+      <div>
+        <h2>Want to play?</h2>
+        <p>New players are always welcome across all four squads.</p>
+      </div>
+      <a href="/register" class="btn btn-primary">Register your interest</a>
     </div>
   </section>
 </BaseLayout>
@@ -57,7 +103,7 @@ import squad2022 from '../assets/squad-2022.jpg';
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 1rem;
-    margin: 1.5rem 0;
+    margin-top: 1.5rem;
   }
 
   .photo-grid img {
@@ -65,5 +111,72 @@ import squad2022 from '../assets/squad-2022.jpg';
     height: 220px;
     object-fit: cover;
     border-radius: 10px;
+  }
+
+  .games-intro {
+    color: #64748b;
+    max-width: 62ch;
+    margin: 0.75rem 0 1.5rem;
+  }
+
+  .game-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1rem;
+  }
+
+  .game-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1.25rem 1.4rem;
+  }
+
+  .game-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #b45309;
+    background: transparent;
+    border: 1px dashed #f59e0b;
+    border-radius: 999px;
+    padding: 0.15rem 0.6rem;
+    margin-bottom: 0.7rem;
+  }
+
+  .game-card h3 {
+    margin: 0 0 0.35rem;
+    font-size: 1.1rem;
+    color: var(--color-navy);
+  }
+
+  .game-card p {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.92rem;
+  }
+
+  .cta-band {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1.75rem 2rem;
+  }
+
+  .cta-band h2 {
+    margin: 0 0 0.3rem;
+    font-size: 1.3rem;
+  }
+
+  .cta-band p {
+    margin: 0;
+    color: #64748b;
   }
 </style>

@@ -16,7 +16,7 @@ interface Props {
 
 const {
   title,
-  description = 'Sefton Veterans Football Club — Over 35s, Over 45s and Open Age football in Sefton, Merseyside.',
+  description = 'Sefton Veterans Football Club — Over 35s, Over 45s, Over 50s and Open Age football in Sefton, Merseyside.',
 } = Astro.props;
 
 const navLinks = [
@@ -25,6 +25,8 @@ const navLinks = [
   { href: '/fixtures', label: 'Fixtures' },
   { href: '/teams', label: 'Teams' },
   { href: '/social', label: 'Social' },
+  { href: '/register', label: 'Play for Us' },
+  { href: 'https://seftonveteransfc.proboards.com/', label: 'Forum', external: true },
 ];
 ---
 
@@ -71,16 +73,16 @@ const navLinks = [
           <ul>
             {navLinks.map((link) => (
               <li>
-                <a href={link.href} class={Astro.url.pathname === link.href ? 'active' : ''}>
-                  {link.label}
+                <a
+                  href={link.href}
+                  class={Astro.url.pathname === link.href ? 'active' : ''}
+                  target={link.external ? '_blank' : undefined}
+                  rel={link.external ? 'noopener noreferrer' : undefined}
+                >
+                  {link.label}{link.external && <span aria-hidden="true"> ↗</span>}
                 </a>
               </li>
             ))}
-            <li>
-              <a href="https://forum.seftonveteransfc.co.uk" target="_blank" rel="noopener noreferrer">
-                Forum ↗
-              </a>
-            </li>
           </ul>
         </nav>
       </div>
@@ -93,7 +95,7 @@ const navLinks = [
     <footer class="site-footer">
       <div class="footer-inner">
         <p>&copy; {new Date().getFullYear()} Sefton Veterans Football Club. All rights reserved.</p>
-        <p class="footer-sub">Based in Sefton, Merseyside &middot; Over 35s &middot; Over 45s &middot; Open Age</p>
+        <p class="footer-sub">Based in Sefton, Merseyside &middot; Over 35s &middot; Over 45s &middot; Over 50s &middot; Open Age</p>
       </div>
     </footer>
 
@@ -375,4 +377,5 @@ const navLinks = [
     margin-top: 0.3rem;
     color: #94a3b8;
   }
+
 </style>

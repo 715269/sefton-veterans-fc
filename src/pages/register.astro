@@ -1,0 +1,327 @@
+---
+// src/pages/register.astro
+//
+// Player registration. Replaces the form that ran on the old Hostinger site,
+// which stops being reachable the moment the domain points at Netlify.
+//
+// Posts to the same Apps Script endpoint as the match report, distinguished by
+// type: 'registration'. The details land on the Registrations tab and an email
+// goes to the club — deliberately NOT the Roster. A registration is an
+// application, and somebody decides on it.
+
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { TEAMS } from '../lib/teams.js';
+
+const ENDPOINT = import.meta.env.PUBLIC_REPORT_ENDPOINT || '';
+const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
+const TEAM_NAMES = TEAMS.map((t) => t.name);
+---
+
+<BaseLayout
+  title="Play for Sefton"
+  description="Register your interest in playing for Sefton Veterans FC."
+>
+  <section class="hero-band">
+    <div class="container">
+      <h1>Play for Sefton</h1>
+      <p>Four squads, all abilities welcome. Fill this in and someone will be in touch.</p>
+    </div>
+  </section>
+
+  <section class="section-padded container">
+    <div class="reg-wrap">
+
+      <div id="reg-form">
+        <div class="reg-row">
+          <div class="reg-field">
+            <label for="reg-forename">First name</label>
+            <input type="text" id="reg-forename" autocomplete="given-name" required />
+          </div>
+          <div class="reg-field">
+            <label for="reg-surname">Surname</label>
+            <input type="text" id="reg-surname" autocomplete="family-name" required />
+          </div>
+        </div>
+
+        <div class="reg-row">
+          <div class="reg-field">
+            <label for="reg-dob">Date of birth</label>
+            <input type="date" id="reg-dob" autocomplete="bday" required />
+            <span class="reg-hint">We ask so we know which squads you're eligible for.</span>
+          </div>
+          <div class="reg-field">
+            <label for="reg-team">Which team interests you?</label>
+            <select id="reg-team">
+              <option value="">Not sure — advise me</option>
+              {TEAM_NAMES.map((name) => <option value={name}>{name}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div class="reg-row">
+          <div class="reg-field">
+            <label for="reg-email">Email</label>
+            <input type="email" id="reg-email" autocomplete="email" inputmode="email" required />
+          </div>
+          <div class="reg-field">
+            <label for="reg-phone">Phone</label>
+            <input type="tel" id="reg-phone" autocomplete="tel" inputmode="tel" />
+          </div>
+        </div>
+
+        <div class="reg-field">
+          <label for="reg-address">Address</label>
+          <textarea id="reg-address" rows="3" autocomplete="street-address"></textarea>
+        </div>
+
+        <div class="reg-field reg-narrow">
+          <label for="reg-postcode">Postcode</label>
+          <input type="text" id="reg-postcode" autocomplete="postal-code" />
+        </div>
+
+        <div class="reg-field">
+          <label for="reg-notes">Anything else we should know?</label>
+          <textarea id="reg-notes" rows="3"></textarea>
+          <span class="reg-hint">Position you play, previous clubs, when you're available — whatever's useful.</span>
+        </div>
+
+        <!-- Not visible to anyone using the site. Anything typed in here came
+             from a bot filling every field it could find. -->
+        <div class="reg-trap" aria-hidden="true">
+          <label for="reg-website">Website</label>
+          <input type="text" id="reg-website" tabindex="-1" autocomplete="off" />
+        </div>
+
+        <div class="reg-consent">
+          <label>
+            <input type="checkbox" id="reg-consent" />
+            <span>
+              I'm happy for Sefton Veterans FC to hold these details so the club
+              can contact me about playing.
+            </span>
+          </label>
+        </div>
+
+        <div class="reg-privacy">
+          <h2>What we do with this</h2>
+          <p>
+            Your details are held by the club committee and used only to contact
+            you about playing for Sefton Veterans FC. They aren't published on
+            this website, shared with anyone outside the club, or used for
+            anything else. Ask any committee member and we'll show you what we
+            hold or delete it.
+          </p>
+        </div>
+
+        <p class="reg-error" id="reg-error" role="alert" hidden></p>
+
+        <button type="button" class="btn btn-primary" id="reg-send">Send registration</button>
+      </div>
+
+      <div id="reg-done" hidden>
+        <h2>Thanks — that's with us</h2>
+        <p>
+          Someone from the club will be in touch by email. If you don't hear
+          anything within a week or so, give us a nudge through the contact
+          details on the site.
+        </p>
+        <p><a href="/teams" class="btn btn-outline">Have a look at the teams</a></p>
+      </div>
+
+    </div>
+  </section>
+</BaseLayout>
+
+<script is:inline define:vars={{ ENDPOINT, SHARED_SECRET }}>
+  (function () {
+    var loadedAt = Date.now();
+    var sending = false;
+
+    function $(id) { return document.getElementById(id); }
+    function val(id) { return String($(id).value || '').trim(); }
+
+    function fail(message) {
+      var box = $('reg-error');
+      box.textContent = message;
+      box.hidden = false;
+      box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function send() {
+      if (sending) return;
+
+      $('reg-error').hidden = true;
+
+      // Checked here as well as in Apps Script. This gives an immediate answer
+      // without a round trip; the server check is the one that actually counts,
+      // since anything in a browser can be bypassed.
+      if (!val('reg-forename') || !val('reg-surname')) {
+        return fail('Please give both your first name and surname.');
+      }
+      if (val('reg-email').indexOf('@') === -1) {
+        return fail('Please give an email address we can reach you on.');
+      }
+      if (!$('reg-consent').checked) {
+        return fail('Please tick the box to say we can hold your details.');
+      }
+
+      sending = true;
+      var button = $('reg-send');
+      button.disabled = true;
+      button.textContent = 'Sending\u2026';
+
+      fetch(ENDPOINT, {
+        method: 'POST',
+        // text/plain avoids a CORS preflight, which Apps Script won't answer.
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          type: 'registration',
+          secret: SHARED_SECRET,
+          forename: val('reg-forename'),
+          surname: val('reg-surname'),
+          dob: val('reg-dob'),
+          address: val('reg-address'),
+          postcode: val('reg-postcode'),
+          email: val('reg-email'),
+          phone: val('reg-phone'),
+          preferredTeam: val('reg-team'),
+          notes: val('reg-notes'),
+          website: val('reg-website'),
+          consent: $('reg-consent').checked,
+          elapsedMs: Date.now() - loadedAt
+        })
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (!data || !data.ok) {
+            throw new Error((data && data.error) || 'Something went wrong.');
+          }
+          $('reg-form').hidden = true;
+          $('reg-done').hidden = false;
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        })
+        .catch(function (err) {
+          sending = false;
+          button.disabled = false;
+          button.textContent = 'Send registration';
+          fail(err.message + ' Please try again, or email the club directly.');
+        });
+    }
+
+    $('reg-send').addEventListener('click', send);
+  })();
+</script>
+
+<style>
+  .hero-band {
+    background: var(--color-navy);
+    color: white;
+    padding: 2.5rem 0;
+  }
+
+  .hero-band h1 { color: white; margin-bottom: 0.5rem; }
+  .hero-band p { color: #cbd5e1; margin: 0; }
+
+  .reg-wrap { max-width: 640px; }
+
+  .reg-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+  }
+
+  .reg-field { margin-bottom: 1.1rem; }
+
+  .reg-narrow { max-width: 220px; }
+
+  .reg-field label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+    color: var(--color-navy);
+  }
+
+  .reg-field input,
+  .reg-field select,
+  .reg-field textarea {
+    width: 100%;
+    padding: 0.6rem 0.7rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font: inherit;
+    background: white;
+  }
+
+  .reg-field input:focus,
+  .reg-field select:focus,
+  .reg-field textarea:focus {
+    outline: 2px solid var(--color-blue);
+    outline-offset: 1px;
+    border-color: var(--color-blue);
+  }
+
+  .reg-hint {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.82rem;
+    color: #64748b;
+  }
+
+  /* Off-screen rather than display:none — some bots skip hidden fields, and
+     the point is that they fill this one in. */
+  .reg-trap {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  .reg-consent {
+    margin: 1.25rem 0;
+    padding: 0.9rem 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+  }
+
+  .reg-consent label {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    cursor: pointer;
+  }
+
+  .reg-consent input {
+    margin-top: 0.25rem;
+    width: 1.1rem;
+    height: 1.1rem;
+    flex: none;
+  }
+
+  .reg-privacy {
+    margin-bottom: 1.5rem;
+    padding-left: 1rem;
+    border-left: 3px solid #e2e8f0;
+  }
+
+  .reg-privacy h2 {
+    font-size: 1rem;
+    margin: 0 0 0.35rem;
+  }
+
+  .reg-privacy p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #64748b;
+  }
+
+  .reg-error {
+    margin-bottom: 1rem;
+    padding: 0.75rem 0.9rem;
+    background: #fee2e2;
+    border-radius: 8px;
+    color: #991b1b;
+    font-weight: 500;
+  }
+</style>

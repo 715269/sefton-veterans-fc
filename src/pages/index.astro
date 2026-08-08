@@ -1,13 +1,38 @@
 ---
+// src/pages/index.astro
+//
+// The home page has one job: someone who has never heard of the club should
+// know within a few seconds what it is, that it is real and active, and how to
+// get involved. Everything below follows from that.
+//
+// Two things are deliberately NOT hardcoded here. The team tiles come from
+// TeamTiles.astro, and the trophy count from lib/honours.js — this page used
+// to carry its own copy of the team blurbs, and they were still advertising
+// competitions the sides had stopped playing in.
+
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { Image } from 'astro:assets';
 import MatchdayStrip from '../components/MatchdayStrip.astro';
 import SeasonRankings from '../components/SeasonRankings.astro';
+import TeamTiles from '../components/TeamTiles.astro';
+import { TOTAL_TROPHIES, FOUNDED, ROLL_OF_HONOUR, AWARDS, CLUBMAN_OF_DECADE } from '../lib/honours.js';
+import { TEAMS } from '../lib/teams.js';
 import heroPitch from '../assets/hero-pitch.jpg';
 import clubBadge from '../assets/club-badge.png';
-import agmGame from '../assets/agm-game-2024.jpg';
-import squad2022 from '../assets/squad-2022.jpg';
-import squad2023 from '../assets/squad-2023.jpg';
+import davidStafford from '../assets/david_stafford.jpg';
+import phillipStafford from '../assets/phillip_stafford.jpg';
+
+const decadePhotos = { 'david-stafford': davidStafford, 'phillip-stafford': phillipStafford };
+
+const seasonsRunning = new Date().getFullYear() - FOUNDED;
+const latestSeason = ROLL_OF_HONOUR[0];
+
+// [name, team, note] -> "Karl Bergqvist (35s)". Joint winners get an "&".
+function winnerLine(entries) {
+  return entries
+    .map(([name, team]) => (team ? `${name} (${team})` : name))
+    .join(' & ');
+}
 ---
 
 <BaseLayout title="Home">
@@ -15,15 +40,35 @@ import squad2023 from '../assets/squad-2023.jpg';
     <Image src={heroPitch} alt="" class="hero-image" width={1019} priority />
     <div class="hero-overlay">
       <div class="container hero-content">
-        <h1>Welcome to Sefton Veterans FC</h1>
-        <p>
-          Competitive, friendly football for Over 35s, Over 45s, Over 50s,
-          and Open Age players across Sefton, Merseyside.
+        <p class="hero-eyebrow">Sefton, Merseyside &middot; Founded {FOUNDED}</p>
+        <h1>League football. Friendship football. Played the right way.</h1>
+        <p class="hero-lede">
+          Four squads — Over 35s, 45s, 50s and Open Age — playing
+          across Merseyside, Wirral and Cheshire. New players always welcome.
         </p>
         <div class="hero-buttons">
-          <a href="/fixtures" class="btn btn-primary">Fixtures &amp; Results</a>
-          <a href="/about" class="btn btn-outline">About the Club</a>
+          <a href="/register" class="btn btn-primary">Play for us</a>
+          <a href="/fixtures" class="btn btn-outline">Fixtures &amp; results</a>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Proof the club is real and has been for a while. Three numbers, no
+       explanation needed, read in about a second. -->
+  <section class="stat-band full-bleed">
+    <div class="container stat-inner">
+      <div class="stat">
+        <span class="stat-num">{TEAMS.length}</span>
+        <span class="stat-label">Teams</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">{TOTAL_TROPHIES}</span>
+        <span class="stat-label">Trophies won</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">{seasonsRunning}</span>
+        <span class="stat-label">Years of the club</span>
       </div>
     </div>
   </section>
@@ -34,70 +79,149 @@ import squad2023 from '../assets/squad-2023.jpg';
 
   <section class="section-light section-padded">
     <div class="container">
+      <div class="section-head">
+        <h2>Our Teams</h2>
+        <a href="/teams" class="section-more">All four teams &rarr;</a>
+      </div>
+      <TeamTiles />
+    </div>
+  </section>
+
+  <section class="section-padded container">
+    <div class="honours-strip">
+      <Image
+        src={clubBadge}
+        alt="Sefton Veterans FC club badge"
+        width={120}
+        class="strip-badge"
+      />
+      <div class="strip-body">
+        <p class="strip-eyebrow">{latestSeason.season} Roll of Honour</p>
+        <ul class="strip-winners">
+          {AWARDS.map(([key, label]) => (
+            <li>
+              <span class="strip-label">{label}</span>
+              <span class="strip-name">{winnerLine(latestSeason[key])}</span>
+            </li>
+          ))}
+        </ul>
+        <a href="/about#roll-of-honour" class="strip-link">
+          Full history &amp; {TOTAL_TROPHIES} trophies &rarr;
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-light section-padded">
+    <div class="container">
       <SeasonRankings />
     </div>
   </section>
 
+  <!-- Sits where a sponsors block would traditionally go, straight after the
+       season's headline honours. Decades of playing and sponsoring the club
+       is a different scale to a season's top scorer, so it gets a feature of
+       its own rather than a place in the honours strip or the tiles above. -->
   <section class="section-padded container">
-    <h2>About Us</h2>
-    <div class="about-grid">
-      <div>
-        <p>
-          Sefton Veterans Football Club was founded in 2011. The club has
-          grown into a strong and stable multi-cup winning organisation,
-          attracting the best players from around Merseyside — providing
-          they fit with the club's ethos and high standards, on and off
-          the pitch.
+    <div class="decade-feature">
+      <div class="decade-photos">
+        {CLUBMAN_OF_DECADE.recipients.map((r) => (
+          <Image
+            src={decadePhotos[r.photo]}
+            alt={`${r.name} playing for Sefton Veterans FC`}
+            width={340}
+            height={453}
+          />
+        ))}
+      </div>
+      <div class="decade-body">
+        <p class="decade-eyebrow">Special Recognition</p>
+        <h2>{CLUBMAN_OF_DECADE.title}</h2>
+        <p class="decade-names">
+          {CLUBMAN_OF_DECADE.recipients.map((r) => r.name).join(' & ')}
         </p>
-        <a href="/about" class="btn btn-primary">More about the club →</a>
-      </div>
-      <Image
-        src={clubBadge}
-        alt="Sefton Veterans FC club badge"
-        width={240}
-        class="about-badge"
-      />
-    </div>
-  </section>
-
-  <section class="section-navy section-padded">
-    <div class="container">
-      <h2>Our Teams</h2>
-      <div class="card-grid">
-        <a href="/teams/over-35s" class="card team-card">
-          <div class="card-body">
-            <h3>Over 35s</h3>
-            <p>Competing in the Cheshire &amp; Wirral Football League Premier Division.</p>
-          </div>
-        </a>
-        <a href="/teams/over-45s" class="card team-card">
-          <div class="card-body">
-            <h3>Over 45s</h3>
-            <p>Friendly and cup football across Merseyside, Wirral and Cheshire.</p>
-          </div>
-        </a>
-        <a href="/teams/over-50s" class="card team-card">
-          <div class="card-body">
-            <h3>Over 50s</h3>
-            <p>Legends Cup and friendly fixtures for our most experienced squad.</p>
-          </div>
-        </a>
-        <a href="/teams/open-age" class="card team-card">
-          <div class="card-body">
-            <h3>Open Age</h3>
-            <p>Playing as Sefton OA FC since the 2023/24 season.</p>
-          </div>
-        </a>
+        <p class="decade-blurb">{CLUBMAN_OF_DECADE.blurb}</p>
+        <p class="decade-thanks">The club are very grateful for all that you have both done.</p>
+        <a href="/about#roll-of-honour" class="decade-link">Roll of Honour &rarr;</a>
       </div>
     </div>
   </section>
 
   <section class="section-padded container">
-    <h2>Club Life</h2>
-    <div class="photo-grid">
-      <Image src={agmGame} alt="Sefton Veterans FC match action" width={700} />
-      <Image src={squad2022} alt="Sefton Veterans FC players" width={700} />
-      <Image src={squad2023} alt="Sefton Veterans FC on the pitch" width={700} />
+    <h2>Get Involved</h2>
+    <p class="section-sub">
+      Come and play, or follow what the club's up to.
+    </p>
+    <div class="involve-grid">
+      <a href="/register" class="involve-card">
+        <span class="involve-icon" aria-hidden="true">⚽</span>
+        <span class="involve-name">Play for us</span>
+        <span class="involve-sub">Register your interest</span>
+      </a>
+      <a href="https://seftonveteransfc.proboards.com/" rel="noopener" class="involve-card">
+        <span class="involve-icon" aria-hidden="true">💬</span>
+        <span class="involve-name">Club Forum</span>
+        <span class="involve-sub">Team news &amp; banter</span>
+      </a>
+      <a href="/fixtures" class="involve-card">
+        <span class="involve-icon" aria-hidden="true">📅</span>
+        <span class="involve-name">Fixtures</span>
+        <span class="involve-sub">This week's games</span>
+      </a>
+    </div>
+
+    <div class="social-row">
+      <span class="social-label">Follow the club</span>
+      <a
+        href="https://facebook.com/#!/pages/Sefton-Veterans-FC/204962572882211"
+        rel="noopener"
+        target="_blank"
+        class="social-icon"
+        aria-label="Sefton Veterans FC on Facebook"
+      >
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M24 12.07C24 5.44 18.63.07 12 .07S0 5.44 0 12.07c0 5.99 4.39 10.95 10.13 11.86v-8.39H7.08v-3.47h3.05V9.41c0-3.01 1.79-4.67 4.53-4.67 1.31 0 2.68.24 2.68.24v2.95h-1.51c-1.49 0-1.96.93-1.96 1.88v2.26h3.33l-.53 3.47h-2.8v8.39C19.61 23.02 24 18.06 24 12.07Z" fill="currentColor"/>
+        </svg>
+      </a>
+      <a
+        href="https://instagram.com/seftonveteransfc/?hl=en"
+        rel="noopener"
+        target="_blank"
+        class="social-icon"
+        aria-label="Sefton Veterans FC on Instagram"
+      >
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="2" y="2" width="20" height="20" rx="5.5" stroke="currentColor" stroke-width="1.8"/>
+          <circle cx="12" cy="12" r="4.4" stroke="currentColor" stroke-width="1.8"/>
+          <circle cx="17.6" cy="6.4" r="1.15" fill="currentColor"/>
+        </svg>
+      </a>
+      <a
+        href="https://twitter.com/seftonvetsfc"
+        rel="noopener"
+        target="_blank"
+        class="social-icon"
+        aria-label="Sefton Veterans FC on X"
+      >
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.66l-5.22-6.82-5.97 6.82H1.66l7.74-8.84L1.25 2.25h6.83l4.71 6.23 5.45-6.23Zm-1.16 17.52h1.83L7.08 4.13H5.12l11.96 15.64Z" fill="currentColor"/>
+        </svg>
+      </a>
+    </div>
+  </section>
+
+  <!-- The last thing on the page, because someone who has scrolled this far is
+       the person most likely to actually get in touch. -->
+  <section class="join-band full-bleed">
+    <div class="container join-inner">
+      <div>
+        <h2>Fancy a game?</h2>
+        <p>
+          Whatever your age group, we're always looking for players. Tell us a
+          bit about yourself and someone will be in touch.
+        </p>
+      </div>
+      <a href="/register" class="btn btn-primary join-btn">Register your interest</a>
     </div>
   </section>
 </BaseLayout>
@@ -127,7 +251,7 @@ import squad2023 from '../assets/squad-2023.jpg';
   }
 
   .hero-overlay {
-    background: linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.6));
+    background: linear-gradient(rgba(15, 23, 42, 0.6), rgba(15, 23, 42, 0.42));
     padding: 5rem 0;
   }
 
@@ -140,19 +264,31 @@ import squad2023 from '../assets/squad-2023.jpg';
   }
 
   .hero-content {
-    max-width: 700px;
+    max-width: 720px;
+  }
+
+  .hero-eyebrow {
+    color: #94a3b8;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 0.75rem;
   }
 
   .hero-content h1 {
     color: white;
-    font-size: 2.5rem;
+    font-size: clamp(2rem, 5vw, 3.1rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
     margin-bottom: 1rem;
+    text-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
   }
 
-  .hero-content p {
+  .hero-lede {
     color: #e2e8f0;
     font-size: 1.15rem;
     margin-bottom: 1.75rem;
+    max-width: 54ch;
   }
 
   .hero-buttons {
@@ -161,53 +297,353 @@ import squad2023 from '../assets/squad-2023.jpg';
     flex-wrap: wrap;
   }
 
-  /* "auto" rather than "1fr" for the badge column: the column is now only as
-     wide as the badge, so the badge no longer sits marooned in white space.
-     The badge file is only 240px wide, so it can't be enlarged much without
-     going soft — shrinking the gap around it is the better lever. */
-  .about-grid {
-    display: grid;
-    grid-template-columns: 2fr auto;
-    gap: 3rem;
+  /* Sits directly under the hero with no gap, so it reads as the foot of the
+     hero rather than as a separate section. */
+  .stat-band {
+    background: var(--color-navy);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 1.75rem 0;
+  }
+
+  .stat-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2.5rem;
+  }
+
+  .stat-num {
+    display: block;
+    font-family: var(--font-heading);
+    font-size: 2.4rem;
+    font-weight: 800;
+    line-height: 1;
+    color: white;
+    letter-spacing: -0.03em;
+  }
+
+  .stat-label {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #94a3b8;
+  }
+
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+  }
+
+  .section-head h2 {
+    margin: 0;
+  }
+
+  .section-more {
+    color: var(--color-blue);
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .section-more:hover {
+    text-decoration: underline;
+  }
+
+  .section-sub {
+    color: #64748b;
+    max-width: 60ch;
+  }
+
+  /* The honours strip: a wide navy band standing in for the old "About the
+     Club" bio. Uses last season's actual results rather than a paragraph of
+     prose, so it's current every time the roll of honour is updated and
+     never needs editing here. */
+  .honours-strip {
+    display: flex;
     align-items: center;
+    gap: 1.75rem;
+    background: var(--color-navy);
+    border-radius: 12px;
+    padding: 1.75rem 2rem;
+    flex-wrap: wrap;
   }
 
-  .about-badge {
-    width: 260px;
-    max-width: 100%;
+  .strip-badge {
+    width: 72px;
     height: auto;
-    justify-self: center;
+    flex: none;
   }
 
-  .team-card {
-    background: white;
+  .strip-body {
+    flex: 1;
+    min-width: 240px;
   }
 
-  .team-card .card-body h3 {
-    color: var(--color-navy);
+  .strip-eyebrow {
+    color: #94a3b8;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 0.6rem;
   }
 
-  .photo-grid {
+  .strip-winners {
+    list-style: none;
+    margin: 0 0 0.85rem;
+    padding: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.3rem 1.5rem;
+  }
+
+  .strip-winners li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.88rem;
+  }
+
+  .strip-label {
+    color: #94a3b8;
+  }
+
+  .strip-name {
+    color: white;
+    font-weight: 600;
+    text-align: right;
+  }
+
+  .strip-link {
+    color: #93c5fd;
+    font-weight: 600;
+    font-size: 0.88rem;
+    text-decoration: none;
+  }
+
+  .strip-link:hover {
+    text-decoration: underline;
+  }
+
+  .involve-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 1rem;
     margin-top: 1.5rem;
   }
 
-  .photo-grid img {
+  .involve-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    text-decoration: none;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1.25rem 1.4rem;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+
+  .involve-card:hover,
+  .involve-card:focus-visible {
+    border-color: var(--color-blue);
+    transform: translateY(-2px);
+  }
+
+  .involve-icon {
+    font-size: 1.6rem;
+  }
+
+  .involve-name {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    color: var(--color-navy);
+  }
+
+  .involve-sub {
+    color: #64748b;
+    font-size: 0.85rem;
+  }
+
+  .social-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .social-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #64748b;
+    margin-right: 0.25rem;
+  }
+
+  .social-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 50%;
+    background: var(--color-navy);
+    color: white;
+    transition: background 0.15s ease, transform 0.15s ease;
+  }
+
+  .social-icon svg {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+
+  .social-icon:hover,
+  .social-icon:focus-visible {
+    background: var(--color-blue);
+    transform: translateY(-2px);
+  }
+
+  .decade-feature {
+    display: grid;
+    grid-template-columns: minmax(260px, 380px) 1fr;
+    gap: 2.5rem;
+    align-items: center;
+    background: var(--color-navy);
+    border-radius: 16px;
+    padding: 2.5rem;
+  }
+
+  .decade-photos {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .decade-photos img {
     width: 100%;
-    height: 220px;
+    aspect-ratio: 3 / 4;
     object-fit: cover;
+    object-position: top;
     border-radius: 10px;
   }
 
+  .decade-eyebrow {
+    color: #93c5fd;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin: 0 0 0.5rem;
+  }
+
+  .decade-body h2 {
+    color: white;
+    margin: 0 0 0.4rem;
+  }
+
+  .decade-names {
+    color: white;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.2rem;
+    margin: 0 0 1rem;
+  }
+
+  .decade-blurb {
+    color: #cbd5e1;
+    margin: 0 0 0.75rem;
+    max-width: 56ch;
+  }
+
+  .decade-thanks {
+    color: white;
+    font-weight: 600;
+    font-style: italic;
+    margin: 0 0 1rem;
+    max-width: 56ch;
+  }
+
+  .decade-link {
+    color: #93c5fd;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-decoration: none;
+  }
+
+  .decade-link:hover {
+    text-decoration: underline;
+  }
+
   @media (max-width: 700px) {
-    .about-grid {
+    .decade-feature {
       grid-template-columns: 1fr;
-      gap: 2rem;
+      padding: 1.75rem;
+    }
+  }
+
+  .join-band {
+    background: var(--color-blue);
+    padding: 3rem 0;
+  }
+
+  .join-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .join-band h2 {
+    color: white;
+    margin: 0 0 0.4rem;
+  }
+
+  .join-band p {
+    color: #dbeafe;
+    margin: 0;
+    max-width: 52ch;
+  }
+
+  /* White on blue, rather than the usual blue-on-white primary button — a
+     blue button on a blue band would disappear. */
+  .join-btn {
+    background: white;
+    color: var(--color-blue);
+    border-color: white;
+    white-space: nowrap;
+  }
+
+  .join-btn:hover {
+    background: #e0e7ff;
+    color: var(--color-navy);
+  }
+
+  @media (max-width: 700px) {
+    .honours-strip {
+      flex-direction: column;
+      align-items: flex-start;
+      text-align: left;
     }
 
-    .hero-content h1 {
+    .strip-winners li {
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .strip-name {
+      text-align: left;
+    }
+
+    .stat-inner {
+      gap: 1.75rem;
+    }
+
+    .stat-num {
       font-size: 1.9rem;
     }
   }

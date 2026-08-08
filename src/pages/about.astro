@@ -1,139 +1,17 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import {
+  HONOURS as honours,
+  ROLL_OF_HONOUR as rollOfHonour,
+  AWARDS,
+  FOUNDED,
+  CLUBMAN_OF_DECADE,
+} from '../lib/honours.js';
+import { Image } from 'astro:assets';
+import davidStafford from '../assets/david_stafford.jpg';
+import phillipStafford from '../assets/phillip_stafford.jpg';
 
-// Trophies, grouped by competition rather than listed by season. Six wins in
-// one cup is the story; six separate rows of a table hides it.
-const honours = [
-  {
-    competition: 'Friendship Cup',
-    seasons: ['2018/19', '2019/20', '2020/21', '2021/22', '2023/24', '2024/25'],
-  },
-  {
-    competition: 'Friendship Masters Cup',
-    seasons: ['2021/22'],
-  },
-];
-
-// The four awards, in the order they're presented on the night.
-const AWARDS = [
-  ['scorer', 'Top Scorer'],
-  ['players', "Players' Player of the Year"],
-  ['managers', "Managers' Player of the Year"],
-  ['clubman', 'Gerry Kinsella Clubman of the Year'],
-];
-
-// Each winner is [name, team, note]. Team and note are optional — before
-// 2021/22 the club ran one side, so those seasons have a single winner with
-// no team against it, which is correct rather than missing.
-//
-// Newest first. Add a new block at the top each summer.
-const rollOfHonour = [
-  {
-    season: '2025/26',
-    scorer: [['Karl Bergqvist', '35s'], ['Paul Smith', '45s']],
-    players: [['Karl Bergqvist', '35s'], ['Mick Shannon', '45s']],
-    managers: [['Karl Bergqvist', '35s'], ['Jay Curran', '45s']],
-    clubman: [['Geoff McKeating']],
-  },
-  {
-    season: '2024/25',
-    scorer: [['Lee Reid', '35s'], ['Paul McKendrick', '45s']],
-    players: [['Neil McQueen', '35s', 'joint'], ['Tony James', '35s', 'joint'], ['Gary Brookes', '45s']],
-    managers: [['Jamie Hay', '35s'], ['Chris Long', '45s']],
-    clubman: [['David Stafford']],
-  },
-  {
-    season: '2023/24',
-    scorer: [['Lee Reid', '35s'], ['Rob Cowley', '45s']],
-    players: [["Danny O'Connor", '35s'], ['Ste McNulty', '45s']],
-    managers: [['Mark Shildhauer', '35s'], ['Joe McNally', '45s']],
-    clubman: [['Dave Sellick']],
-  },
-  {
-    season: '2022/23',
-    scorer: [['Lee Reid', '35s'], ['Rob Cowley', '45s']],
-    players: [['Thomas King', '35s'], ['Steve King', '45s']],
-    managers: [['David Stafford', '35s'], ['Ste Byrne', '45s']],
-    clubman: [['Geoff McKeating']],
-  },
-  {
-    season: '2021/22',
-    scorer: [['Lee Reid', '35s'], ['Rob Cowley', '45s']],
-    players: [['Lee Reid', '35s'], ['Rob Cowley', '45s']],
-    managers: [['Chris Long', '35s'], ['Rob Cowley', '45s']],
-    clubman: [['Alan Roberts']],
-  },
-  {
-    season: '2020/21',
-    scorer: [['Lee Reid']],
-    players: [['Dave Parkinson']],
-    managers: [['Joe McNally']],
-    clubman: [['Gerard Kinsella']],
-  },
-  {
-    season: '2019/20',
-    scorer: [['Dave Parkinson']],
-    players: [['Dave Parkinson']],
-    managers: [['Warren Jones']],
-    clubman: [['Brian Gilligan']],
-  },
-  {
-    season: '2018/19',
-    scorer: [['Dave Parkinson']],
-    players: [['Ste King']],
-    managers: [['Carl Brennand']],
-    clubman: [['The Club']],
-  },
-  {
-    season: '2017/18',
-    scorer: [['Mark Shildhauer']],
-    players: [['Mark Shildhauer']],
-    managers: [['Chris Long']],
-    clubman: [['Chris Long']],
-  },
-  {
-    season: '2016/17',
-    scorer: [['Mark Shildhauer']],
-    players: [['Wayne Robinson']],
-    managers: [['Gary McBirnie']],
-    clubman: [['Wayne Robinson']],
-  },
-  {
-    season: '2015/16',
-    scorer: [['Gary Roberts']],
-    players: [['Jay Shannon']],
-    managers: [['Jay Shannon']],
-    clubman: [['Brian Gilligan']],
-  },
-  {
-    season: '2014/15',
-    scorer: [['Jamie Byron']],
-    players: [['Jamie Byron']],
-    managers: [['Mike Jump']],
-    clubman: [['Jay Shannon']],
-  },
-  {
-    season: '2013/14',
-    scorer: [['Mannie Penzie']],
-    players: [['Chris Long']],
-    managers: [['Gerard Kinsella']],
-    clubman: [['Joe Lundon']],
-  },
-  {
-    season: '2012/13',
-    scorer: [['Paul Jordan']],
-    players: [['Jay Shannon']],
-    managers: [['Wayne Robinson']],
-    clubman: [['Gerard Kinsella']],
-  },
-  {
-    season: '2011/12',
-    scorer: [['Les Ash']],
-    players: [['Chris McGunigle']],
-    managers: [['Dave Scanlan']],
-    clubman: [['Mark Williams']],
-  },
-];
+const decadePhotos = { 'david-stafford': davidStafford, 'phillip-stafford': phillipStafford };
 
 const committee = [
   { role: 'Chairman', name: 'Geoff McKeating' },
@@ -173,53 +51,31 @@ const teamRoles = [
   <section class="section-padded container">
     <h2>Our History</h2>
     <p>
-      The majority of our original members are former long-standing players
-      and members of Waterloo Grammar School Old Boys Football Club, who
-      decided that in order to continue with the ethos of "competitive
-      friendly football for Over 35s" there was a need to establish this
-      progressive and forward-looking football club.
+      Sefton Veterans FC was founded in {FOUNDED} by former long-standing
+      players and members of Waterloo Grammar School Old Boys Football Club,
+      who wanted to keep playing the way they always had. The idea was
+      straightforward and it still holds: competitive friendly football for
+      over 35s — properly contested games, played in the right spirit.
     </p>
     <p>
-      The club has grown into a strong and stable multi-cup winning
-      operation, attracting the best players from around Merseyside —
-      providing they fit with the club's high standards, on and off the
-      pitch.
+      From that start the club has grown into a stable, multi-cup-winning
+      operation, attracting good players from across Merseyside — providing
+      they fit the club's standards, on and off the pitch.
     </p>
     <p>
-      In 2019, SVFC added a +50 team, now known as the Over 45s, playing
-      highly competitive games across Merseyside, Wirral and Cheshire. In
-      2023/24 the club welcomed an association with an open age team,
-      playing under the name Sefton OA FC. In 2025/26, the Over 35s entered
-      the Cheshire &amp; Wirral Football League (CWFL).
+      A second veterans side followed in 2019, and the club now runs an Over
+      45s and an Over 50s alongside the original Over 35s. The 45s and 50s play
+      chiefly in the Friendship Masters Cup and the Friendship Legends Cup, with
+      a full programme of friendlies across Merseyside, Wirral and Cheshire.
     </p>
-  </section>
-
-  <section class="section-navy section-padded">
-    <div class="container">
-      <h2>Committee</h2>
-      <div class="card-grid">
-        {committee.map((person) => (
-          <div class="card committee-card">
-            <div class="card-body">
-              <h3>{person.name}</h3>
-              <p>{person.role}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <h3 class="group-heading">Team Management</h3>
-      <div class="card-grid">
-        {teamRoles.map((person) => (
-          <div class="card committee-card">
-            <div class="card-body">
-              <h3>{person.name}</h3>
-              <p>{person.role}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <p>
+      In 2023/24 the club welcomed an association with an open age team playing
+      under the name Sefton OA FC, who won the Liverpool Football League Cup in
+      2025/26. That same season the Over 35s stepped up into the Cheshire &amp;
+      Wirral Football League — the club's first venture into league football,
+      and a measure of how far it has come from a handful of old boys wanting a
+      game on a Saturday.
+    </p>
   </section>
 
   <section class="section-padded container">
@@ -233,6 +89,7 @@ const teamRoles = [
             <span class="trophy-times">{h.seasons.length === 1 ? 'win' : 'wins'}</span>
           </p>
           <h3>{h.competition}</h3>
+          {h.team && <p class="trophy-team">{h.team}</p>}
           <ul class="trophy-seasons">
             {h.seasons.map((s) => <li>{s}</li>)}
           </ul>
@@ -241,6 +98,30 @@ const teamRoles = [
     </div>
   </section>
   <section class="section-padded container">
+    <div class="decade-feature">
+      <div class="decade-photos">
+        {CLUBMAN_OF_DECADE.recipients.map((r) => (
+          <Image
+            src={decadePhotos[r.photo]}
+            alt={`${r.name} playing for Sefton Veterans FC`}
+            width={340}
+            height={453}
+          />
+        ))}
+      </div>
+      <div class="decade-body">
+        <p class="decade-eyebrow">Special Recognition</p>
+        <h2>{CLUBMAN_OF_DECADE.title}</h2>
+        <p class="decade-names">
+          {CLUBMAN_OF_DECADE.recipients.map((r) => r.name).join(' & ')}
+        </p>
+        <p class="decade-blurb">{CLUBMAN_OF_DECADE.blurb}</p>
+        <p class="decade-thanks">The club are very grateful for all that you have both done.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="roll-of-honour" class="section-padded container">
     <h2>Roll of Honour</h2>
     <p class="roll-intro">
       Season by season since 2011/12. Where two names share an award, the club
@@ -266,9 +147,50 @@ const teamRoles = [
                 </dd>
               </div>
             ))}
+
+            {year.decadeAward && (
+              <div class="roll-row roll-row-decade">
+                <dt>{CLUBMAN_OF_DECADE.title}</dt>
+                <dd>
+                  {CLUBMAN_OF_DECADE.recipients.map((r) => (
+                    <span class="winner">
+                      <span class="winner-name">{r.name}</span>
+                    </span>
+                  ))}
+                </dd>
+              </div>
+            )}
           </dl>
         </article>
       ))}
+    </div>
+  </section>
+
+  <!-- Governance last, deliberately. A visitor scrolling this far is a
+       prospective player or a sponsor checking the club is real — what the
+       club has won matters more to them than who chairs the committee, so
+       that goes first and this is reference material at the foot. -->
+  <section class="section-navy section-padded">
+    <div class="container">
+      <h2>Committee</h2>
+      <ul class="role-list">
+        {committee.map((person) => (
+          <li>
+            <span class="role-name">{person.name}</span>
+            <span class="role-tag">{person.role}</span>
+          </li>
+        ))}
+      </ul>
+
+      <h3 class="group-heading">Team Management</h3>
+      <ul class="role-list">
+        {teamRoles.map((person) => (
+          <li>
+            <span class="role-name">{person.name}</span>
+            <span class="role-tag">{person.role}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   </section>
 </BaseLayout>
@@ -296,21 +218,39 @@ const teamRoles = [
     font-size: 1.35rem;
   }
 
-  .committee-card {
-    background: white;
+  /* A dense list rather than a grid of cards. Seventeen cards sized for a
+     photo and a paragraph, holding two lines of text each, was the single
+     biggest use of space on the page — and the section a first-time visitor
+     cares about least. This does the same job in a third of the height. */
+  .role-list {
+    list-style: none;
+    margin: 0 0 0.5rem;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 0.15rem 1.5rem;
   }
 
-  .committee-card .card-body h3 {
-    color: var(--color-navy);
-    font-size: 1rem;
+  .role-list li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .committee-card .card-body p {
-    color: var(--color-blue);
+  .role-name {
+    color: white;
     font-weight: 600;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+    font-size: 0.92rem;
+  }
+
+  .role-tag {
+    color: #94a3b8;
+    font-size: 0.75rem;
+    text-align: right;
+    white-space: nowrap;
   }
 
   .honours-grid {
@@ -352,9 +292,17 @@ const teamRoles = [
   }
 
   .honour-trophy h3 {
-    margin: 0 0 0.75rem;
+    margin: 0 0 0.15rem;
     font-size: 1.1rem;
     color: var(--color-navy);
+  }
+
+  .trophy-team {
+    margin: 0 0 0.75rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
   }
 
   .trophy-seasons {
@@ -373,6 +321,75 @@ const teamRoles = [
     background: #e0e7ff;
     border-radius: 999px;
     padding: 0.15rem 0.6rem;
+  }
+
+  /* A feature, not a card — this recognises decades of service, which is a
+     different scale to a season's top scorer, so it gets more visual weight
+     than anything in the grids around it. */
+  .decade-feature {
+    display: grid;
+    grid-template-columns: minmax(260px, 380px) 1fr;
+    gap: 2.5rem;
+    align-items: center;
+    background: var(--color-navy);
+    border-radius: 16px;
+    padding: 2.5rem;
+  }
+
+  .decade-photos {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .decade-photos img {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    object-position: top;
+    border-radius: 10px;
+  }
+
+  .decade-eyebrow {
+    color: #93c5fd;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin: 0 0 0.5rem;
+  }
+
+  .decade-body h2 {
+    color: white;
+    margin: 0 0 0.4rem;
+  }
+
+  .decade-names {
+    color: white;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.2rem;
+    margin: 0 0 1rem;
+  }
+
+  .decade-blurb {
+    color: #cbd5e1;
+    margin: 0 0 0.75rem;
+    max-width: 56ch;
+  }
+
+  .decade-thanks {
+    color: white;
+    font-weight: 600;
+    font-style: italic;
+    margin: 0;
+    max-width: 56ch;
+  }
+
+  @media (max-width: 700px) {
+    .decade-feature {
+      grid-template-columns: 1fr;
+      padding: 1.75rem;
+    }
   }
 
   .roll-intro {
@@ -430,6 +447,19 @@ const teamRoles = [
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
+  }
+
+  /* Not an annual award like the four above it, so it gets a rule and a
+     touch of colour rather than blending in as a fifth ordinary category. */
+  .roll-row-decade {
+    margin-top: 1rem !important;
+    padding-top: 0.75rem;
+    border-top: 1px dashed #cbd5e1;
+  }
+
+  .roll-row-decade dt {
+    color: var(--color-blue);
+    font-weight: 600;
   }
 
   .winner {

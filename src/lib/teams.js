@@ -21,25 +21,25 @@ export const TEAMS = [
   {
     slug: 'over-35s',
     name: 'Over 35s',
-    comp: 'Cheshire & Wirral Premier',
+    comp: 'Cheshire & Wirral Premier League',
     blurb: 'Competing in the Cheshire & Wirral Football League Premier Division.',
   },
   {
     slug: 'over-45s',
     name: 'Over 45s',
-    comp: 'Friendlies & cup',
-    blurb: 'Friendly and cup football across Merseyside, Wirral and Cheshire.',
+    comp: 'Friendship Masters Cup',
+    blurb: 'Friendship Masters Cup and friendly fixtures across Merseyside, Wirral and Cheshire.',
   },
   {
     slug: 'over-50s',
     name: 'Over 50s',
-    comp: 'Legends Cup',
-    blurb: 'Legends Cup and friendly fixtures for our most experienced squad.',
+    comp: 'Friendship Legends Cup',
+    blurb: 'Friendship Legends Cup and friendlies for our most experienced squad.',
   },
   {
     slug: 'open-age',
     name: 'Open Age',
-    comp: 'Sefton OA FC',
+    comp: 'Liverpool Football League Championship',
     blurb: 'Playing as Sefton OA FC since the 2023/24 season.',
   },
 ];
