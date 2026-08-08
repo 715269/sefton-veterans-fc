@@ -111,6 +111,13 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
             <span class="mr-step-val" id="mr-score-for" aria-live="polite" aria-labelledby="mr-us-label">0</span>
             <button type="button" class="mr-step-btn" data-score="for" data-dir="1" aria-label="One more for Sefton">+</button>
           </div>
+		  <div class="mr-field">
+  <label class="mr-checkbox">
+    <input type="checkbox" id="mr-interclub" />
+    <span>Inter-club game (Sefton side v Sefton side)</span>
+  </label>
+  <span class="mr-hint">Reduces subs to £5 a head for this match.</span>
+</div>
         </div>
         <div class="mr-scorebox">
           <h3 id="mr-them-label">Opponent</h3>
@@ -1180,6 +1187,7 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
       team: state.team,
       opponent: state.opponent,
       homeAway: state.homeAway,
+	  interClub: !!document.getElementById('mr-interclub')?.checked,
       matchDate: state.matchDate,
       competition: state.competition,
       scoreFor: state.scoreFor,
@@ -1294,6 +1302,7 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     state.ownGoals = 0;
     state.shortSide = false;
     state.notes = '';
+	document.getElementById('mr-interclub').checked = false;
     $('mr-opponent').value = '';
     $('mr-date').value = state.matchDate;
     $('mr-notes').value = '';
@@ -1721,6 +1730,12 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     height: 44px;
     font-size: 0.95rem;
     color: var(--navy);
+  }
+    .mr-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    cursor: pointer;
   }
 
   .mr-sheet li .num {
