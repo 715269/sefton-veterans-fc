@@ -1,0 +1,329 @@
+---
+// src/pages/dashboard.astro
+//
+// For captains and committee, not for public visitors — deliberately left
+// out of the main nav, the same way match-report.astro already is. Reachable
+// by URL for anyone who's been given the link, not advertised beyond that.
+//
+// Built entirely from the same public results feed the rest of the site
+// already reads — nothing new is exposed here. Subs, payment methods and
+// card reasons stay off this page exactly as they stay off every public
+// page, because a forum post about a match never needed any of that.
+
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getResults } from '../lib/season.js';
+import { TEAMS } from '../lib/teams.js';
+
+const results = await getResults();
+
+// Names are stored "Surname, Forename" everywhere in the system. Right for
+// sorting and matching, wrong for a forum post, which wants to read like a
+// person wrote it.
+function readable(raw) {
+  if (!raw) return '';
+  const parts = String(raw).split(',');
+  if (parts.length !== 2) return String(raw).trim();
+  return `${parts[1].trim()} ${parts[0].trim()}`;
+}
+
+function readableList(list) {
+  return (list || []).map(readable).filter(Boolean);
+}
+
+function prettyDate(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Builds the actual text a captain pastes into the forum. Kept as one
+// function rather than scattered across the markup, so the exact wording is
+// easy to find and adjust in one place.
+function forumText(match) {
+  const d = match.detail;
+  const lines = [];
+
+  lines.push(`${match.team} v ${match.opponent} — ${prettyDate(match.date)}`);
+  if (match.venue || match.type) {
+    lines.push([match.venue, match.type].filter(Boolean).join(' · '));
+  }
+  lines.push('');
+  lines.push(`FT: ${match.team} ${match.result} ${match.opponent} (${match.outcome})`);
+
+  // Unlike detail.scorers (raw "Surname, Forename" objects, used in the
+  // drawer), the top-level match.scorers here is already the display-ready
+  // array from the Results sheet — "Bergqvist (4)", own goals folded in —
+  // so it needs no conversion, just joining.
+  if (match.scorers && match.scorers.length) {
+    lines.push('');
+    lines.push(`Scorers: ${match.scorers.join(', ')}`);
+  }
+
+  if (d && d.motm) {
+    lines.push(`Man of the Match: ${readable(d.motm)}`);
+  }
+
+  if (d && (d.booked?.length || d.sentOff?.length)) {
+    lines.push('');
+    if (d.sentOff?.length) lines.push(`Sent off: ${readableList(d.sentOff).join(', ')}`);
+    if (d.booked?.length) lines.push(`Booked: ${readableList(d.booked).join(', ')}`);
+  }
+
+  if (d && (d.captain || (d.managers && d.managers.length))) {
+    lines.push('');
+    if (d.captain) lines.push(`Captain: ${readable(d.captain)}`);
+    if (d.managers && d.managers.length) {
+      lines.push(`${d.managers.length > 1 ? 'Managers' : 'Manager'}: ${readableList(d.managers).join(' & ')}`);
+    }
+  }
+
+  if (d && d.notes) {
+    lines.push('');
+    lines.push(d.notes);
+  }
+
+  return lines.join('\n');
+}
+
+const matches = results.map((match) => ({
+  ...match,
+  forumText: forumText(match),
+}));
+---
+
+<BaseLayout title="Dashboard" description="Match reports, ready to post.">
+  <section class="hero-band">
+    <div class="container">
+      <h1>Match Reports Dashboard</h1>
+      <p>Every filed report, formatted and ready to copy straight into the forum.</p>
+    </div>
+  </section>
+
+  <section class="section-padded container">
+    <div class="filter-row" id="team-filter" role="group" aria-label="Filter by team">
+      <button type="button" class="filter-btn" data-team="" aria-pressed="true">All teams</button>
+      {TEAMS.map((t) => (
+        <button type="button" class="filter-btn" data-team={t.name} aria-pressed="false">{t.name}</button>
+      ))}
+    </div>
+
+    {matches.length === 0 && (
+      <p class="muted">No match reports filed yet this season.</p>
+    )}
+
+    <div class="match-list">
+      {matches.map((match, i) => (
+        <article class="match-card" data-team={match.team} data-index={i}>
+          <div class="match-card-head">
+            <div>
+              <span class="match-team">{match.team}</span>
+              <h2>{match.team} v {match.opponent}</h2>
+              <p class="match-meta">
+                {prettyDate(match.date)}
+                {match.venue && <> · {match.venue}</>}
+                {match.type && <> · {match.type}</>}
+              </p>
+            </div>
+            <span class={`outcome-badge outcome-${String(match.outcome).toLowerCase()}`}>
+              {match.result} — {match.outcome}
+            </span>
+          </div>
+
+          {!match.detail && (
+            <p class="muted small">
+              There's a result but no filed report for this match — nothing to post yet.
+            </p>
+          )}
+
+          {match.detail && (
+            <>
+              <pre class="forum-text" id={`forum-text-${i}`}>{match.forumText}</pre>
+              <button type="button" class="copy-btn" data-copy-target={`forum-text-${i}`}>
+                Copy for forum
+              </button>
+            </>
+          )}
+        </article>
+      ))}
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  // Filtering is just show/hide on cards already rendered at build time —
+  // there is no live data to fetch, so no reason to touch the network.
+  const filterButtons = document.querySelectorAll('#team-filter .filter-btn');
+  const cards = document.querySelectorAll('.match-card');
+
+  filterButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const team = btn.getAttribute('data-team');
+      filterButtons.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      cards.forEach((card) => {
+        card.hidden = Boolean(team) && card.getAttribute('data-team') !== team;
+      });
+    });
+  });
+
+  // Clipboard API needs a secure context (HTTPS or localhost). Both apply
+  // here, but the fallback covers anything unexpected rather than leaving
+  // the button silently doing nothing.
+  document.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const targetId = btn.getAttribute('data-copy-target');
+      const pre = document.getElementById(targetId);
+      if (!pre) return;
+      const text = pre.textContent || '';
+
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (err) {
+        const range = document.createRange();
+        range.selectNodeContents(pre);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        document.execCommand('copy');
+        selection.removeAllRanges();
+      }
+
+      const original = btn.textContent;
+      btn.textContent = 'Copied';
+      btn.disabled = true;
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.disabled = false;
+      }, 1500);
+    });
+  });
+</script>
+
+<style>
+  .hero-band {
+    background: var(--color-navy);
+    color: white;
+    padding: 2.5rem 0;
+  }
+
+  .hero-band h1 {
+    color: white;
+    margin-bottom: 0.5rem;
+  }
+
+  .hero-band p {
+    color: #cbd5e1;
+    margin: 0;
+  }
+
+  .filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .filter-btn {
+    background: white;
+    border: 1.5px solid #e2e8f0;
+    color: #64748b;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.4rem 0.9rem;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .filter-btn[aria-pressed='true'] {
+    background: var(--color-navy);
+    border-color: var(--color-navy);
+    color: white;
+  }
+
+  .muted { color: #64748b; }
+  .small { font-size: 0.9rem; }
+
+  .match-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .match-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    background: white;
+  }
+
+  .match-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }
+
+  .match-team {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-blue);
+    font-weight: 600;
+    margin-bottom: 0.15rem;
+  }
+
+  .match-card-head h2 {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+
+  .match-meta {
+    margin: 0.2rem 0 0;
+    font-size: 0.85rem;
+    color: #64748b;
+  }
+
+  .outcome-badge {
+    display: inline-block;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .outcome-win  { background: #dcfce7; color: #166534; }
+  .outcome-draw { background: #fef9c3; color: #854d0e; }
+  .outcome-loss { background: #fee2e2; color: #991b1b; }
+
+  .forum-text {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    color: #1e293b;
+    margin: 0 0 0.75rem;
+  }
+
+  .copy-btn {
+    background: var(--color-blue);
+    color: white;
+    border: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.5rem 1.1rem;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .copy-btn:disabled {
+    background: #16a34a;
+    cursor: default;
+  }
+</style>

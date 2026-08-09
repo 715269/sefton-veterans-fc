@@ -367,7 +367,7 @@ async function tallyPlayers() {
       players.set(k, {
         name, team,
         appearances: 0, starts: 0, subApps: 0,
-        goals: 0, booked: 0, sentOff: 0
+        goals: 0, booked: 0, sentOff: 0, motm: 0
       });
     }
     return players.get(k);
@@ -401,6 +401,15 @@ async function tallyPlayers() {
 
     for (const name of d.booked || []) find(match.team, name).booked += 1;
     for (const name of d.sentOff || []) find(match.team, name).sentOff += 1;
+
+    // A team can only give the award to someone who actually played, so an
+    // MotM naming anyone else is treated as unrecorded rather than counted —
+    // most likely a name typed slightly differently from the teamsheet.
+    if (d.motm) {
+      const onTeamsheet = (d.starting || []).includes(d.motm) ||
+                           (d.bench || []).includes(d.motm);
+      if (onTeamsheet) find(match.team, d.motm).motm += 1;
+    }
   }
 
   return [...players.values()];
@@ -423,9 +432,19 @@ function rankSquad(squad) {
       b.starts - a.starts ||
       a.name.localeCompare(b.name));
 
+  // Same tie logic as scorers: most awards first, then whoever earned them
+  // in fewer appearances, then alphabetically.
+  const motm = squad
+    .filter((p) => p.motm > 0)
+    .sort((a, b) =>
+      b.motm - a.motm ||
+      a.appearances - b.appearances ||
+      a.name.localeCompare(b.name));
+
   return {
     scorers: withRanks(scorers, (p) => p.goals),
-    appearances: withRanks(appearances, (p) => p.appearances)
+    appearances: withRanks(appearances, (p) => p.appearances),
+    motm: withRanks(motm, (p) => p.motm)
   };
 }
 

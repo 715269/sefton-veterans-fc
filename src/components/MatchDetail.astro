@@ -249,6 +249,17 @@ const MATCHES = fixtures
     return section;
   }
 
+  function buildMotm(detail) {
+    if (!detail.motm) return null;
+    var section = el('section', 'md-section');
+    section.appendChild(el('h3', null, 'Man of the match'));
+    var line = el('p', 'md-motm');
+    line.appendChild(document.createTextNode('\u2b50 '));
+    line.appendChild(el('strong', null, readable(detail.motm)));
+    section.appendChild(line);
+    return section;
+  }
+
   function buildCards(detail) {
     var booked = detail.booked || [];
     var sentOff = detail.sentOff || [];
@@ -328,7 +339,7 @@ const MATCHES = fixtures
         'The result is recorded, but no match report was filed for this game.'));
     } else {
       body.appendChild(buildTeamsheet(detail));
-      [buildScorers(detail), buildCards(detail), buildNotes(detail)]
+      [buildScorers(detail), buildMotm(detail), buildCards(detail), buildNotes(detail)]
         .forEach(function (section) { if (section) body.appendChild(section); });
     }
 
@@ -794,6 +805,12 @@ const MATCHES = fixtures
 
   .md-tag[data-kind='booked']  { color: #78350f; background: #fef3c7; }
   .md-tag[data-kind='sentOff'] { color: #7f1d1d; background: #fee2e2; }
+
+  .md-motm {
+    font-size: 0.95rem;
+    color: var(--md-ink);
+    margin: 0;
+  }
 
   .md-notes {
     font-size: 0.92rem;

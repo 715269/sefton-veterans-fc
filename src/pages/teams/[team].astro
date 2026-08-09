@@ -96,9 +96,10 @@ const squadGroups = POSITION_GROUPS
 const unplaced = sortedSquad.filter((n) => !KNOWN_POSITIONS.includes(positions[n]));
 
 /* ---------------- rankings ---------------- */
-const stats = statsByTeam[name] ?? { scorers: [], appearances: [] };
+const stats = statsByTeam[name] ?? { scorers: [], appearances: [], motm: [] };
 const topScorers = stats.scorers.slice(0, 10);
 const topAppearances = stats.appearances.slice(0, 10);
+const topMotm = (stats.motm ?? []).slice(0, 10);
 
 /* ---------------- display helpers ----------------
    Names are stored "Surname, Forename" throughout the system, which is right
@@ -302,7 +303,7 @@ const FORM_WORDS = { W: 'Win', D: 'Draw', L: 'Loss' };
   </section>
 
   <!-- ---------------- rankings ---------------- -->
-  {(topScorers.length > 0 || topAppearances.length > 0) && (
+  {(topScorers.length > 0 || topAppearances.length > 0 || topMotm.length > 0) && (
     <section class="section-padded container">
       <h2>Season statistics</h2>
       <p class="muted small">
@@ -348,6 +349,26 @@ const FORM_WORDS = { W: 'Win', D: 'Draw', L: 'Loss' };
                     <td>{readable(p.name)}</td>
                     <td class="narrow">{p.appearances}</td>
                     <td class="narrow">{p.starts}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {topMotm.length > 0 && (
+          <div>
+            <h3>Man of the Match</h3>
+            <table class="team-table">
+              <thead>
+                <tr><th class="narrow">#</th><th>Player</th><th class="narrow">Awards</th></tr>
+              </thead>
+              <tbody>
+                {topMotm.map((p) => (
+                  <tr>
+                    <td class="narrow">{p.joint ? `=${p.rank}` : p.rank}</td>
+                    <td>{readable(p.name)}</td>
+                    <td class="narrow">{p.motm}</td>
                   </tr>
                 ))}
               </tbody>

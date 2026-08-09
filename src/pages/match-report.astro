@@ -3,7 +3,7 @@
 // writes to the same spreadsheet via the Apps Script web app.
 import BaseLayout from '../layouts/BaseLayout.astro';
 import players from '../data/players.json';
-import { getSquads, getSeason, getPositions, getFixtures, getManagers } from '../lib/season.js';
+import { getSquads, getSeason, getPositions, getFixtures, getManagers, getStatsByTeam } from '../lib/season.js';
 // The fixture list comes from the Fixtures tab in the spreadsheet, falling
 // back to the local file if the feed is unreachable.
 const FIXTURES = await getFixtures();
@@ -20,6 +20,17 @@ const POSITIONS = await getPositions();
 // Who normally manages each side, from the Managers tab. Only a default — the
 // report records who was actually there on the day.
 const MANAGERS = await getManagers();
+
+// How many times each player has appeared for each team, keyed the same way
+// as POSITIONS — "team|name" in lower case. Used only to default subs to £0
+// on a genuine first appearance; the captain can always type over it.
+const statsByTeam = await getStatsByTeam();
+const APPEARANCES = {};
+for (const team of Object.keys(statsByTeam)) {
+  for (const p of statsByTeam[team].appearances) {
+    APPEARANCES[(team + '|' + p.name).toLowerCase()] = p.appearances;
+  }
+}
 
 // Which fixtures already have a report, so a captain can be told before he
 // files a second one over the top of it.
@@ -50,6 +61,7 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
       <li data-state="now">Match</li>
       <li>Squad</li>
       <li>Goals &amp; notes</li>
+      <li>Subs &amp; costs</li>
     </ol>
   </header>
 
@@ -179,6 +191,12 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     </div>
 
     <div class="mr-field">
+      <label class="mr-label" for="mr-motm">Man of the match</label>
+      <select id="mr-motm"></select>
+      <span class="mr-hint">Pick from anyone who played today — optional.</span>
+    </div>
+
+    <div class="mr-field">
       <label class="mr-label" for="mr-notes">Match summary</label>
       <textarea id="mr-notes" placeholder="How the game went — optional, but it appears on the website."></textarea>
     </div>
@@ -190,8 +208,55 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     </div>
   </section>
 
+  <!-- ============ STEP 4 — subs and costs ============ -->
+  <section class="mr-panel" data-panel="4" aria-label="Subs and costs">
+    <div class="mr-field">
+      <span class="mr-label">Money collected</span>
+      <div class="mr-money-totals" id="mr-money-totals"></div>
+    </div>
+
+    <div class="mr-field">
+      <span class="mr-label">Who paid what</span>
+      <span class="mr-hint">
+        Figures are worked out automatically — full price, £5 for an inter-club
+        game, free on a genuine first appearance. Tap any amount to change it,
+        for example someone catching up on a missed game.
+      </span>
+      <div id="mr-subs-list"></div>
+    </div>
+
+    <div class="mr-field">
+      <span class="mr-label">Hard costs</span>
+      <span class="mr-hint">Whatever came out of the cash you collected — leave blank if nothing did.</span>
+      <div class="mr-cost-grid">
+        <div class="mr-cost-field">
+          <label for="mr-cost-ref">Ref fee</label>
+          <input type="number" id="mr-cost-ref" inputmode="decimal" min="0" step="0.01" placeholder="0.00" />
+        </div>
+        <div class="mr-cost-field">
+          <label for="mr-cost-kit">Kit cleaning</label>
+          <input type="number" id="mr-cost-kit" inputmode="decimal" min="0" step="0.01" placeholder="0.00" />
+        </div>
+        <div class="mr-cost-field">
+          <label for="mr-cost-pitch">Pitch share</label>
+          <input type="number" id="mr-cost-pitch" inputmode="decimal" min="0" step="0.01" placeholder="0.00" />
+        </div>
+        <div class="mr-cost-field">
+          <label for="mr-cost-other">Other</label>
+          <input type="number" id="mr-cost-other" inputmode="decimal" min="0" step="0.01" placeholder="0.00" />
+        </div>
+      </div>
+      <div class="mr-field" id="mr-cost-other-note-wrap" hidden>
+        <label class="mr-label" for="mr-cost-other-note">What was the "Other" cost?</label>
+        <input type="text" id="mr-cost-other-note" placeholder="e.g. new nets" />
+      </div>
+    </div>
+
+    <div class="mr-balance" id="mr-balance"></div>
+  </section>
+
   <!-- ============ Sent ============ -->
-  <section class="mr-panel" data-panel="4" aria-label="Report sent">
+  <section class="mr-panel" data-panel="5" aria-label="Report sent">
     <div class="mr-done">
       <div class="tick" aria-hidden="true">✓</div>
       <h2 id="mr-done-head">Report sent</h2>
@@ -210,7 +275,7 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
 </div>
 </BaseLayout>
 
-<script is:inline define:vars={{ SQUADS: squads, FIXTURES, FILED, POSITIONS, MANAGERS, ENDPOINT, SHARED_SECRET }}>
+<script is:inline define:vars={{ SQUADS: squads, FIXTURES, FILED, POSITIONS, MANAGERS, APPEARANCES, ENDPOINT, SHARED_SECRET }}>
   /* Expects: SQUADS, FIXTURES, FILED, POSITIONS, ENDPOINT, SHARED_SECRET */
 
   var TEAM_ORDER = ['Over 35s', 'Over 45s', 'Over 50s', 'Open Age'];
@@ -244,6 +309,8 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     noKeeper: false,   /* set when the captain confirms nobody kept goal */
     order: [],     /* selection order, so the teamsheet reads like one */
     guests: [],
+    motm: '',      /* the report can name nobody — leaving it blank is fine */
+    costs: { refFee: 0, kitCleaning: 0, pitchShare: 0, other: 0, otherNote: '' },
     notes: ''
   };
 
@@ -270,7 +337,7 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
       Object.keys(state).forEach(function (k) {
         if (saved[k] !== undefined && saved[k] !== null) state[k] = saved[k];
       });
-      state.step = Math.min(state.step, 3);
+      state.step = Math.min(state.step, 4);
       if (!state.reportId) state.reportId = newId();
       return true;
     } catch (err) { return false; }
@@ -739,6 +806,7 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     if (state.players[name]) {
       delete state.players[name];
       state.order = state.order.filter(function (n) { return n !== name; });
+      if (state.motm === name) state.motm = '';
     } else {
       state.players[name] = {
         role: 'start', payment: '', subsPaid: false,
@@ -953,6 +1021,182 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     renderTally();
   }
 
+  // Anyone who played today, start or bench. Re-run every time step 3 is
+  // shown, so someone added or removed from the squad after the fact keeps
+  // this list correct. If the player currently picked has since been taken
+  // off the squad, the pick is cleared rather than left pointing at nobody.
+  function buildMotmPicker() {
+    var sel = $('mr-motm');
+    if (state.motm && selectedNames().indexOf(state.motm) === -1) {
+      state.motm = '';
+    }
+
+    sel.innerHTML = '';
+    var head = document.createElement('option');
+    head.value = '';
+    head.textContent = 'Not recorded';
+    sel.appendChild(head);
+
+    selectedNames().forEach(function (name) {
+      var o = document.createElement('option');
+      o.value = name;
+      o.textContent = readableName(name);
+      sel.appendChild(o);
+    });
+
+    sel.value = state.motm || '';
+  }
+
+  /* ---------------- step 4 — subs and costs ---------------- */
+
+  var SUBS_FULL = 10;
+  var SUBS_INTERCLUB = 5;
+  var SUBS_FIRST_GAME = 0;
+
+  // How many times this player has appeared for this team BEFORE today,
+  // from the Player Stats feed at the moment the page loaded. Someone who
+  // has never appeared simply is not in the map, which reads the same as
+  // zero — both mean "this is their first game".
+  function priorAppearances(name) {
+    var lookup = (typeof APPEARANCES === 'object' && APPEARANCES) || {};
+    return lookup[(state.team + '|' + name).toLowerCase()] || 0;
+  }
+
+  // The starting suggestion only — never overrides a figure the captain has
+  // already typed over. Mirrors subsAmountFor() in Code.gs exactly, so the
+  // number shown here is the same one the server would have picked anyway.
+  function defaultSubsAmount(name) {
+    if (priorAppearances(name) === 0) return SUBS_FIRST_GAME;
+    var interClub = !!document.getElementById('mr-interclub')?.checked;
+    return interClub ? SUBS_INTERCLUB : SUBS_FULL;
+  }
+
+  function formatMoney(n) {
+    return '£' + (Math.round((Number(n) || 0) * 100) / 100).toFixed(2);
+  }
+
+  function paymentMethod(name) {
+    var p = state.players[name];
+    if (!p) return 'Unpaid';
+    if (p.payment === 'Transfer') return 'Transfer';
+    if (p.payment === 'Paid') return 'Cash';
+    return 'Unpaid';
+  }
+
+  function moneyTotals() {
+    var totals = { Cash: 0, Transfer: 0, Unpaid: 0 };
+    selectedNames().forEach(function (name) {
+      var amount = Number(state.players[name].subsAmount) || 0;
+      totals[paymentMethod(name)] += amount;
+    });
+    return totals;
+  }
+
+  function costsTotal() {
+    var c = state.costs;
+    return (Number(c.refFee) || 0) + (Number(c.kitCleaning) || 0) +
+           (Number(c.pitchShare) || 0) + (Number(c.other) || 0);
+  }
+
+  // Redraws only the totals and the balance line — called on every keystroke
+  // in a per-player amount or a cost field, so it has to stay cheap. The
+  // player list itself is only rebuilt by buildSubsCostsStep(), when the
+  // step is first shown.
+  function renderMoneyTotals() {
+    var totals = moneyTotals();
+    var wrap = $('mr-money-totals');
+    wrap.innerHTML = '';
+    [['Cash', 'Paid'], ['Transfer', 'Committed to transfer'], ['Unpaid', 'Unpaid']]
+      .forEach(function (pair) {
+        var box = document.createElement('div');
+        box.className = 'mr-money-box';
+        var val = document.createElement('span');
+        val.className = 'mr-money-val';
+        val.textContent = formatMoney(totals[pair[0]]);
+        var label = document.createElement('span');
+        label.className = 'mr-money-label';
+        label.textContent = pair[1];
+        box.appendChild(val);
+        box.appendChild(label);
+        wrap.appendChild(box);
+      });
+
+    var balance = totals.Cash - costsTotal();
+    var balanceBox = $('mr-balance');
+    balanceBox.innerHTML = '';
+    var label = document.createElement('span');
+    label.className = 'mr-balance-label';
+    label.textContent = balance < 0
+      ? 'The club owes the captain'
+      : 'Balance to transfer to the treasurer';
+    var val = document.createElement('span');
+    val.className = 'mr-balance-val';
+    val.textContent = formatMoney(Math.abs(balance));
+    balanceBox.appendChild(label);
+    balanceBox.appendChild(val);
+  }
+
+  // Builds the player list fresh — called once when step 4 is shown, not on
+  // every keystroke. Anyone who does not already have an explicit amount
+  // gets the automatic default, and that default is written into state so
+  // buildPayload() can read a plain number without recalculating anything.
+  function buildSubsCostsStep() {
+    selectedNames().forEach(function (name) {
+      var p = state.players[name];
+      if (typeof p.subsAmount !== 'number') {
+        p.subsAmount = defaultSubsAmount(name);
+      }
+    });
+
+    var list = $('mr-subs-list');
+    list.innerHTML = '';
+    selectedNames().forEach(function (name) {
+      var p = state.players[name];
+      var method = paymentMethod(name);
+
+      var row = document.createElement('div');
+      row.className = 'mr-subs-row';
+
+      var who = document.createElement('span');
+      who.className = 'who';
+      who.textContent = readableName(name);
+
+      var badge = document.createElement('span');
+      badge.className = 'mr-method-badge';
+      badge.setAttribute('data-method', method);
+      badge.textContent = method;
+
+      var amountWrap = document.createElement('span');
+      amountWrap.className = 'mr-amount-wrap';
+      var currency = document.createElement('span');
+      currency.textContent = '£';
+      var input = document.createElement('input');
+      input.type = 'number';
+      input.className = 'mr-amount-input';
+      input.setAttribute('data-for', name);
+      input.min = '0';
+      input.step = '0.01';
+      input.inputMode = 'decimal';
+      input.value = p.subsAmount;
+      amountWrap.appendChild(currency);
+      amountWrap.appendChild(input);
+
+      row.appendChild(who);
+      row.appendChild(badge);
+      row.appendChild(amountWrap);
+      list.appendChild(row);
+    });
+
+    $('mr-cost-ref').value = state.costs.refFee || '';
+    $('mr-cost-kit').value = state.costs.kitCleaning || '';
+    $('mr-cost-pitch').value = state.costs.pitchShare || '';
+    $('mr-cost-other').value = state.costs.other || '';
+    $('mr-cost-other-note').value = state.costs.otherNote || '';
+    $('mr-cost-other-note-wrap').hidden = !(state.costs.other > 0);
+
+    renderMoneyTotals();
+  }
+
   function goalRow(key, label, goals, isOwn) {
     var row = document.createElement('div');
     row.className = 'mr-goal-row';
@@ -1093,7 +1337,8 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
       ['Score', state.scoreFor + '–' + state.scoreAgainst],
       ['Starting', startersOf().length],
       ['Bench', benchOf().length],
-      ['Subs paid', paid + ' of ' + names.length]
+      ['Subs paid', paid + ' of ' + names.length],
+      ['Man of the match', state.motm ? readableName(state.motm) : 'Not recorded']
     ];
     var replacing = alreadyFiled();
     var warn = $('mr-replacing');
@@ -1156,10 +1401,10 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
       var n = i + 1;
       li.setAttribute('data-state', n === step ? 'now' : (n < step ? 'done' : ''));
     });
-    $('mr-rail').hidden = step === 4;
-    $('mr-back').hidden = step === 1 || step === 4;
-    $('mr-next').hidden = step === 4;
-    $('mr-next').textContent = step === 3
+    $('mr-rail').hidden = step === 5;
+    $('mr-back').hidden = step === 1 || step === 5;
+    $('mr-next').hidden = step === 5;
+    $('mr-next').textContent = step === 4
       ? (alreadyFiled() ? 'Replace report' : 'Send report')
       : 'Next';
     alertBox('');
@@ -1167,10 +1412,12 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     if (step === 2) buildSquad();
     if (step === 3) {
       buildGoals();
+      buildMotmPicker();
       renderReview();
     }
+    if (step === 4) buildSubsCostsStep();
     window.scrollTo({ top: 0, behavior: 'auto' });
-    if (step !== 4) saveDraft();
+    if (step !== 5) saveDraft();
   }
 
   /* ---------------- sending ---------------- */
@@ -1203,6 +1450,11 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
           position: p.position || '',
           subsPaid: !!p.subsPaid,
           payment: p.payment || '',
+          // Whatever the Subs & Costs step ended up showing — the automatic
+          // default if the captain never touched it, or whatever he typed
+          // over it with. Falls back to 0 only if that step was somehow
+          // never reached, which the form's own step order should prevent.
+          subsAmount: typeof p.subsAmount === 'number' ? p.subsAmount : 0,
           booked: !!p.booked,
           sentOff: !!p.sentOff,
           cardNote: p.cardNote || '',
@@ -1210,6 +1462,14 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
         };
       }),
       ownGoals: state.ownGoals || 0,
+      motm: state.motm || '',
+      costs: {
+        refFee: Number(state.costs.refFee) || 0,
+        kitCleaning: Number(state.costs.kitCleaning) || 0,
+        pitchShare: Number(state.costs.pitchShare) || 0,
+        other: Number(state.costs.other) || 0,
+        otherNote: state.costs.otherNote || ''
+      },
       positionUpdates: changedPositions(),
       newPlayers: state.guests.slice(),
       notes: state.notes
@@ -1272,7 +1532,7 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
       clearDraft();
       $('mr-done-head').textContent = 'Report sent';
       $('mr-done-body').textContent = 'Thanks — it is in the spreadsheet.';
-      goTo(4);
+      goTo(5);
     }).catch(function () {
       var held = queue(payload);
       clearDraft();
@@ -1280,7 +1540,7 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
       $('mr-done-body').textContent = held
         ? 'No connection right now. The report is saved on this phone and sends on its own next time you open this page with signal.'
         : 'The report could not be sent and could not be saved. Please try again on a better connection.';
-      goTo(4);
+      goTo(5);
     }).then(function () {
       sending = false;
       btn.disabled = false;
@@ -1304,7 +1564,15 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     state.ownGoals = 0;
     state.shortSide = false;
     state.notes = '';
+    state.motm = '';
+    state.costs = { refFee: 0, kitCleaning: 0, pitchShare: 0, other: 0, otherNote: '' };
 	document.getElementById('mr-interclub').checked = false;
+	document.getElementById('mr-motm').value = '';
+    ['mr-cost-ref', 'mr-cost-kit', 'mr-cost-pitch', 'mr-cost-other'].forEach(function (id) {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('mr-cost-other-note').value = '';
+    document.getElementById('mr-cost-other-note-wrap').hidden = true;
     $('mr-opponent').value = '';
     $('mr-date').value = state.matchDate;
     $('mr-notes').value = '';
@@ -1395,6 +1663,38 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
       addScorer(this.value);
     });
 
+    $('mr-motm').addEventListener('change', function () {
+      state.motm = this.value;
+      saveDraft();
+    });
+
+    $('mr-subs-list').addEventListener('input', function (e) {
+      var input = e.target.closest('[data-for]');
+      if (!input) return;
+      var name = input.getAttribute('data-for');
+      if (!state.players[name]) return;
+      state.players[name].subsAmount = Math.max(0, parseFloat(input.value) || 0);
+      renderMoneyTotals();
+      saveDraft();
+    });
+
+    [['mr-cost-ref', 'refFee'], ['mr-cost-kit', 'kitCleaning'],
+     ['mr-cost-pitch', 'pitchShare'], ['mr-cost-other', 'other']].forEach(function (pair) {
+      $(pair[0]).addEventListener('input', function () {
+        state.costs[pair[1]] = Math.max(0, parseFloat(this.value) || 0);
+        if (pair[1] === 'other') {
+          $('mr-cost-other-note-wrap').hidden = !(state.costs.other > 0);
+        }
+        renderMoneyTotals();
+        saveDraft();
+      });
+    });
+
+    $('mr-cost-other-note').addEventListener('input', function () {
+      state.costs.otherNote = this.value;
+      saveDraft();
+    });
+
     $('mr-squad').addEventListener('input', function (e) {
       var note = e.target.closest('[data-note]');
       if (note) setCardNote(note.getAttribute('data-note'), note.value);
@@ -1438,7 +1738,7 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
         if (target && target.focus && target.tagName === 'INPUT') target.focus();
         return;
       }
-      if (state.step === 3) {
+      if (state.step === 4) {
         var replacing = alreadyFiled();
         if (replacing && !state.confirmedReplace) {
           state.confirmedReplace = true;
@@ -1896,6 +2196,128 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
   .mr-review dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 0.9rem; }
   .mr-review dt { font-size: 0.8rem; color: var(--muted); }
   .mr-review dd { margin: 0; font-size: 0.9rem; color: var(--navy); font-weight: 600; text-align: right; }
+
+  /* ---------- Subs & costs ---------- */
+
+  .mr-money-totals {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+    margin-top: 0.5rem;
+  }
+
+  .mr-money-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.75rem 0.5rem;
+    border: 1.5px solid var(--line);
+    border-radius: 12px;
+    text-align: center;
+  }
+
+  .mr-money-val {
+    font-family: var(--font-heading, inherit);
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: var(--navy);
+  }
+
+  .mr-money-label {
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .mr-subs-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mr-subs-row .who {
+    font-size: 0.92rem;
+    color: var(--navy);
+  }
+
+  .mr-method-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .mr-method-badge[data-method='Cash']     { background: #dcfce7; color: #166534; }
+  .mr-method-badge[data-method='Transfer'] { background: #e0e7ff; color: #3730a3; }
+  .mr-method-badge[data-method='Unpaid']   { background: #fee2e2; color: #991b1b; }
+
+  .mr-amount-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  .mr-amount-input {
+    width: 4.2rem;
+    padding: 0.35rem 0.4rem;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    text-align: right;
+  }
+
+  .mr-cost-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    margin-top: 0.6rem;
+  }
+
+  .mr-cost-field label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 0.25rem;
+  }
+
+  .mr-cost-field input {
+    width: 100%;
+    padding: 0.55rem 0.65rem;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    font-size: 0.95rem;
+  }
+
+  .mr-balance {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding: 1rem 1.1rem;
+    background: var(--navy);
+    border-radius: 12px;
+  }
+
+  .mr-balance-label {
+    font-size: 0.85rem;
+    color: #cbd5e1;
+  }
+
+  .mr-balance-val {
+    font-family: var(--font-heading, inherit);
+    font-weight: 700;
+    font-size: 1.3rem;
+    color: white;
+  }
 
   /* ---------- Sticky action bar ---------- */
 
