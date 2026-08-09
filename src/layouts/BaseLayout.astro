@@ -99,7 +99,7 @@ const navLinks = [
     <footer class="site-footer">
       <div class="footer-inner">
         <p>&copy; {new Date().getFullYear()} Sefton Veterans Football Club. All rights reserved.</p>
-        <p class="footer-sub">Based in Sefton, Merseyside &middot; Over 35s &middot; Over 45s &middot; Over 50s &middot; Open Age</p>
+        <p class="footer-sub">Based in Sefton, Merseyside &middot; Over 35s &middot; Over 45s &middot; Over 50s &middot; Open Age &middot; <a href="/dashboard" class="footer-link">Dashboard</a></p>
       </div>
     </footer>
 
@@ -447,6 +447,18 @@ const navLinks = [
   .footer-sub {
     margin-top: 0.3rem;
     color: #94a3b8;
+  }
+
+  .footer-link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+
+  .footer-link:hover,
+  .footer-link:focus-visible {
+    color: white;
+    border-bottom-color: currentColor;
   }
 
 </style>

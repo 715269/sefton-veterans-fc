@@ -50,6 +50,20 @@ function forumText(match) {
   lines.push('');
   lines.push(`FT: ${match.team} ${match.result} ${match.opponent} (${match.outcome})`);
 
+  if (d && (d.keeper || (d.starting && d.starting.length) || (d.bench && d.bench.length))) {
+    lines.push('');
+    if (d.keeper) lines.push(`GK: ${readable(d.keeper)}`);
+    if (d.starting && d.starting.length) {
+      // The keeper's already named on his own line above — leave him out of
+      // the outfield list rather than naming him twice.
+      const outfield = d.starting.filter((n) => n !== d.keeper);
+      if (outfield.length) lines.push(`Team: ${readableList(outfield).join(', ')}`);
+    }
+    if (d.bench && d.bench.length) {
+      lines.push(`Sub${d.bench.length > 1 ? 's' : ''}: ${readableList(d.bench).join(', ')}`);
+    }
+  }
+
   // Unlike detail.scorers (raw "Surname, Forename" objects, used in the
   // drawer), the top-level match.scorers here is already the display-ready
   // array from the Results sheet — "Bergqvist (4)", own goals folded in —
@@ -71,7 +85,7 @@ function forumText(match) {
 
   if (d && (d.captain || (d.managers && d.managers.length))) {
     lines.push('');
-    if (d.captain) lines.push(`Captain: ${readable(d.captain)}`);
+    if (d.captain) lines.push(`Submitter: ${readable(d.captain)}`);
     if (d.managers && d.managers.length) {
       lines.push(`${d.managers.length > 1 ? 'Managers' : 'Manager'}: ${readableList(d.managers).join(' & ')}`);
     }

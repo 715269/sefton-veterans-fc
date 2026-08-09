@@ -209,21 +209,6 @@ function winnerLine(entries) {
       </a>
     </div>
   </section>
-
-  <!-- The last thing on the page, because someone who has scrolled this far is
-       the person most likely to actually get in touch. -->
-  <section class="join-band full-bleed">
-    <div class="container join-inner">
-      <div>
-        <h2>Fancy a game?</h2>
-        <p>
-          Whatever your age group, we're always looking for players. Tell us a
-          bit about yourself and someone will be in touch.
-        </p>
-      </div>
-      <a href="/register" class="btn btn-primary join-btn">Register your interest</a>
-    </div>
-  </section>
 </BaseLayout>
 
 <style>
@@ -583,44 +568,6 @@ function winnerLine(entries) {
       grid-template-columns: 1fr;
       padding: 1.75rem;
     }
-  }
-
-  .join-band {
-    background: var(--color-blue);
-    padding: 3rem 0;
-  }
-
-  .join-inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 2rem;
-    flex-wrap: wrap;
-  }
-
-  .join-band h2 {
-    color: white;
-    margin: 0 0 0.4rem;
-  }
-
-  .join-band p {
-    color: #dbeafe;
-    margin: 0;
-    max-width: 52ch;
-  }
-
-  /* White on blue, rather than the usual blue-on-white primary button — a
-     blue button on a blue band would disappear. */
-  .join-btn {
-    background: white;
-    color: var(--color-blue);
-    border-color: white;
-    white-space: nowrap;
-  }
-
-  .join-btn:hover {
-    background: #e0e7ff;
-    color: var(--color-navy);
   }
 
   @media (max-width: 700px) {
