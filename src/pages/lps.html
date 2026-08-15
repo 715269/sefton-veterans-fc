@@ -357,6 +357,42 @@
   .rules li{margin-bottom:10px}
   .rules b{color:var(--flood);font-weight:700}
 
+  /* ---------- admin ---------- */
+
+  .arow{
+    border-bottom:1px solid var(--line);
+    padding:10px 0;
+  }
+  .arow:last-child{border-bottom:0}
+  .arow-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .arow-name{font-weight:700;font-size:15px}
+  .arow-name.out{color:var(--mute);text-decoration:line-through}
+  .arow-meta{font-size:13px;color:var(--mute);margin-top:2px;word-break:break-all}
+  .arow-btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .mini{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--mute);
+    border-radius:2px;
+    font-family:var(--display);
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-size:12px;
+    padding:6px 10px;
+    cursor:pointer;
+  }
+  .mini:hover{border-color:var(--flood);color:var(--chalk)}
+  .mini.on{background:var(--live);border-color:var(--live);color:var(--ink);font-weight:700}
+  .tag{
+    font-family:var(--display);
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-size:11px;
+    white-space:nowrap;
+  }
+  .tag.yes{color:var(--live)}
+  .tag.no{color:var(--mute)}
+
   .hidden{display:none}
 
   footer{
@@ -477,21 +513,52 @@
 
   <!-- ============ ADMIN ============ -->
   <section id="tab-admin" class="hidden">
+
     <div class="card">
       <h2>Admin</h2>
       <label for="adToken">Admin token</label>
-      <input id="adToken" type="password" placeholder="Not stored">
-      <div class="row" style="margin-bottom:10px">
-        <button class="btn ghost" data-admin="sync">Sync fixtures</button>
-        <button class="btn ghost" data-admin="resolve">Resolve round</button>
-      </div>
-      <label for="adGW">Set current gameweek</label>
-      <input id="adGW" inputmode="numeric" placeholder="e.g. 4">
-      <button class="btn ghost" data-admin="setgw" style="margin-bottom:10px">Set gameweek</button>
-      <label for="adRevive">Put a player back in</label>
-      <input id="adRevive" placeholder="Exact name">
-      <button class="btn danger" data-admin="revive">Revive player</button>
+      <input id="adToken" type="password" placeholder="Not stored — type it each visit">
+      <button class="btn" id="btnAdLoad">Unlock</button>
       <pre id="adOut" class="muted" style="white-space:pre-wrap;margin-top:14px"></pre>
+    </div>
+
+    <div id="adPanel" class="hidden">
+
+      <div class="card">
+        <h2>Entries</h2>
+        <p id="adEntries" class="muted" style="margin:0 0 12px"></p>
+        <div class="row">
+          <button class="btn ghost" data-entries="open">Open entries</button>
+          <button class="btn ghost" data-entries="running">Close entries</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>The week</h2>
+        <div class="row" style="margin-bottom:10px">
+          <button class="btn ghost" data-admin="sync">Sync fixtures</button>
+          <button class="btn ghost" data-admin="resolve">Resolve round</button>
+        </div>
+        <label for="adGW">Current gameweek</label>
+        <input id="adGW" inputmode="numeric" placeholder="Leave blank for the live one">
+        <button class="btn ghost" data-admin="setgw">Set gameweek</button>
+      </div>
+
+      <div class="card">
+        <h2>Add a player</h2>
+        <label for="adNewName">Name</label>
+        <input id="adNewName" placeholder="First and last name">
+        <label for="adNewEmail">Email (optional)</label>
+        <input id="adNewEmail" type="email" placeholder="Leave blank if they haven't got one">
+        <button class="btn ghost" id="btnAdAdd">Enter them</button>
+      </div>
+
+      <div class="card">
+        <h2>Players</h2>
+        <p id="adCounts" class="muted" style="margin:0 0 6px"></p>
+        <div id="adPlayers"></div>
+      </div>
+
     </div>
   </section>
 
@@ -798,22 +865,126 @@ $('btnAdmin').addEventListener('click', ()=>{
   if(!t.classList.contains('hidden')) t.scrollIntoView({behavior:'smooth'});
 });
 
+// ---------------- admin ----------------
+
+let ADMIN = null;   // token, held in memory for this visit only
+
+function adOut(text){ $('adOut').textContent = text || ''; }
+
+async function adminApi(action, payload){
+  if(!ADMIN) throw new Error('Enter the admin token first.');
+  return api(action, Object.assign({adminToken:ADMIN}, payload || {}));
+}
+
+async function loadAdmin(){
+  try{
+    const d = await adminApi('players');
+
+    $('adEntries').textContent = d.entries === 'open'
+      ? 'Entries are OPEN — anyone can still join.'
+      : d.entries === 'running'
+        ? 'Entries are CLOSED. Gameweek ' + d.gameweek + ' is live.'
+        : 'Game marked finished.';
+
+    const alive = d.players.filter(p=>p.status==='alive');
+    const paid = d.players.filter(p=>p.paid);
+    const nopick = alive.filter(p=>!p.picked);
+    $('adCounts').textContent = d.players.length + ' entered · ' + alive.length
+      + ' still in · ' + paid.length + ' paid'
+      + (nopick.length ? ' · ' + nopick.length + ' yet to pick GW' + d.gameweek : ' · all picked');
+
+    $('adPlayers').innerHTML = d.players.map(p=>{
+      const key = p.email || p.name;
+      const pickTxt = p.picked
+        ? (p.pick ? 'GW' + d.gameweek + ': ' + p.pick : 'Picked')
+        : (p.status === 'alive' ? 'No pick yet' : '');
+      return '<div class="arow">'
+        + '<div class="arow-top">'
+        +   '<span class="arow-name '+(p.status==='out'?'out':'')+'">'+p.name+'</span>'
+        +   '<span class="tag '+(p.paid?'yes':'no')+'">'+(p.paid?'Paid':'Unpaid')+'</span>'
+        + '</div>'
+        + '<div class="arow-meta">'+(p.email || 'no email')
+        +   (pickTxt ? ' · ' + pickTxt : '')
+        +   (p.status==='out' ? ' · out GW'+(p.gwOut||'?') : '')
+        + '</div>'
+        + '<div class="arow-btns">'
+        +   '<button class="mini '+(p.paid?'on':'')+'" data-p="'+key+'" data-do="paid" data-v="'+(p.paid?'N':'Y')+'">'
+        +     (p.paid?'Mark unpaid':'Mark paid')+'</button>'
+        +   '<button class="mini" data-p="'+key+'" data-do="resendpin">Send PIN</button>'
+        +   (p.status==='alive'
+              ? '<button class="mini" data-p="'+key+'" data-do="knockout">Knock out</button>'
+              : '<button class="mini" data-p="'+key+'" data-do="revive">Put back in</button>')
+        + '</div>'
+        + '</div>';
+    }).join('');
+
+    $('adPlayers').querySelectorAll('button[data-do]').forEach(b=>{
+      b.addEventListener('click', ()=> adminRowAction(b.dataset.do, b.dataset.p, b.dataset.v));
+    });
+
+    $('adPanel').classList.remove('hidden');
+  }catch(err){
+    adOut('Failed: ' + err.message);
+    $('adPanel').classList.add('hidden');
+  }
+}
+
+async function adminRowAction(what, who, value){
+  if(what === 'knockout' && !confirm('Knock ' + who + ' out?')) return;
+  adOut('Working…');
+  try{
+    const map = {paid:'setpaid', resendpin:'resendpin', knockout:'knockout', revive:'revive'};
+    const res = await adminApi(map[what], {player:who, paid:value});
+    adOut(typeof res === 'string' ? res : JSON.stringify(res, null, 2));
+    await loadAdmin();
+    await refresh();
+  }catch(err){ adOut('Failed: ' + err.message); }
+}
+
+$('btnAdLoad').addEventListener('click', async ()=>{
+  ADMIN = $('adToken').value.trim();
+  if(!ADMIN){ adOut('Enter the admin token first.'); return; }
+  adOut('Checking…');
+  await loadAdmin();
+  if(!$('adPanel').classList.contains('hidden')) adOut('');
+});
+
+document.querySelectorAll('[data-entries]').forEach(b=>{
+  b.addEventListener('click', async ()=>{
+    const v = b.dataset.entries;
+    if(v === 'running' && !confirm('Close entries? Nobody new can join after this.')) return;
+    adOut('Working…');
+    try{
+      adOut(await adminApi('entries', {value:v}));
+      await loadAdmin();
+    }catch(err){ adOut('Failed: ' + err.message); }
+  });
+});
+
+$('btnAdAdd').addEventListener('click', async ()=>{
+  const name = $('adNewName').value.trim();
+  if(!name){ adOut('Name required.'); return; }
+  adOut('Working…');
+  try{
+    const res = await adminApi('addplayer', {name, email:$('adNewEmail').value.trim()});
+    adOut(res.message);
+    $('adNewName').value = ''; $('adNewEmail').value = '';
+    await loadAdmin();
+    await refresh();
+  }catch(err){ adOut('Failed: ' + err.message); }
+});
+
 document.querySelectorAll('[data-admin]').forEach(b=>{
   b.addEventListener('click', async ()=>{
     const action = b.dataset.admin;
-    const adminToken = $('adToken').value.trim();
-    if(!adminToken){ $('adOut').textContent = 'Enter the admin token first.'; return; }
-    if(action === 'revive' && !confirm('Put ' + $('adRevive').value + ' back in?')) return;
-    $('adOut').textContent = 'Working…';
+    if(action === 'resolve' && !confirm('Resolve the round now? This knocks people out and emails everyone.')) return;
+    adOut('Working…');
     try{
-      const res = await api(action, {
-        adminToken,
-        gw: $('adGW').value.trim() || (STATE ? STATE.gameweek : ''),
-        player: $('adRevive').value.trim()
-      });
-      $('adOut').textContent = typeof res === 'string' ? res : JSON.stringify(res, null, 2);
+      const res = await adminApi(action, {gw: $('adGW').value.trim() || (STATE ? STATE.gameweek : '')});
+      adOut(typeof res === 'string' ? res : JSON.stringify(res, null, 2));
+      await loadAdmin();
       await refresh();
-    }catch(err){ $('adOut').textContent = 'Failed: ' + err.message; }
+    }catch(err){ adOut('Failed: ' + err.message); }
   });
 });
 
