@@ -9,12 +9,15 @@
   ================================================================
   SVFC LAST PERSON STANDING — front end
   ================================================================
-  1. Paste your Apps Script web app /exec URL into API_URL below.
-  2. Upload this file via Hostinger File Manager, then point an
-     embed widget at it (or drop the whole thing into an HTML
-     embed block).
-  3. Nothing secret lives in this file. The admin token is typed
-     in at the time of use and never stored.
+  Deployment: commit this file to the New SVFC repo and push.
+  Netlify rebuilds automatically; the page is live at /lps/.
+
+  The Apps Script URL below must match the CURRENT deployment.
+  If you redeploy the backend, paste the new /exec URL in and push
+  again — Apps Script serves cached code from old deployments.
+
+  Nothing secret lives in this file. The admin token is typed in
+  at the time of use and never stored.
   ================================================================
 -->
 
@@ -435,6 +438,8 @@
         <div id="burntList"></div>
       </div>
 
+      <button class="btn ghost" id="btnSwitch">Sign out / switch player</button>
+
     </div>
   </section>
 
@@ -491,7 +496,7 @@
 
 <script>
 // ================================================================
-// CONFIG — paste your Apps Script web app URL here
+// CONFIG — the Apps Script web app URL
 // ================================================================
 const API_URL = 'https://script.google.com/macros/s/AKfycby08mTJmk0P-WOWafu7LINDUANz_E4TC8DuAoIlRlJCLp6XRYeeCFQklrmPVTuhtgQvhw/exec';
 
@@ -763,6 +768,13 @@ $('btnJoin').addEventListener('click', async ()=>{
     say('You\'re in. Your PIN is <b>'+res.pin+'</b> — write it down, you\'ll need it to change your pick.', 'good');
     await refresh();
   }catch(err){ say(err.message, 'bad'); }
+});
+
+$('btnSwitch').addEventListener('click', ()=>{
+  signOut();
+  $('inName').value = '';
+  $('inPin').value = '';
+  say('Signed out. Sign in with another name and PIN, or enter the game.');
 });
 
 $('btnAdmin').addEventListener('click', ()=>{
