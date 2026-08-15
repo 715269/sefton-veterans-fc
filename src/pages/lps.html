@@ -408,11 +408,14 @@
 
     <div class="card" id="signinCard">
       <h2>Sign in</h2>
-      <label for="inName">Your name</label>
-      <input id="inName" autocomplete="name" placeholder="As you entered it">
+      <label for="inName">Email address</label>
+      <input id="inName" type="email" autocomplete="email" placeholder="The one you entered with">
       <label for="inPin">PIN</label>
       <input id="inPin" inputmode="numeric" maxlength="4" placeholder="4 digits">
       <button class="btn" id="btnSignin">Sign in</button>
+      <p class="muted" style="margin:14px 0 6px">
+        <a href="#" id="btnForgot" style="color:var(--flood)">Forgotten your PIN?</a>
+      </p>
       <p class="muted" style="margin:14px 0 6px">Not entered yet?</p>
       <button class="btn ghost" id="btnShowJoin">Enter the game</button>
     </div>
@@ -421,8 +424,8 @@
       <h2>Enter the game</h2>
       <label for="jnName">Your name</label>
       <input id="jnName" autocomplete="name" placeholder="First and last name">
-      <label for="jnEmail">Email (for reminders)</label>
-      <input id="jnEmail" type="email" autocomplete="email" placeholder="Optional but recommended">
+      <label for="jnEmail">Email address</label>
+      <input id="jnEmail" type="email" autocomplete="email" placeholder="You'll sign in with this">
       <button class="btn" id="btnJoin">Enter</button>
       <button class="btn ghost" id="btnCancelJoin" style="margin-top:10px">Back</button>
     </div>
@@ -687,7 +690,7 @@ async function refresh(){
   }catch(err){
     if(String(err.message).match(/PIN|not found/i)){
       signOut();
-      say('That name and PIN didn\'t match. Try again.', 'bad');
+      say('That email address and PIN didn\'t match. Try again.', 'bad');
     } else {
       say(err.message, 'bad');
     }
@@ -751,7 +754,7 @@ $('btnCancelJoin').addEventListener('click', ()=>{
 
 $('btnSignin').addEventListener('click', async ()=>{
   const name = $('inName').value.trim(), pin = $('inPin').value.trim();
-  if(!name || !pin){ say('Name and PIN both needed.', 'bad'); return; }
+  if(!name || !pin){ say('Email address and PIN both needed.', 'bad'); return; }
   ME = {name, pin};
   store.set('svfc_lps', JSON.stringify(ME));
   say('');
@@ -760,13 +763,25 @@ $('btnSignin').addEventListener('click', async ()=>{
 
 $('btnJoin').addEventListener('click', async ()=>{
   const name = $('jnName').value.trim();
+  const email = $('jnEmail').value.trim();
   if(!name){ say('We need a name.', 'bad'); return; }
+  if(!email || email.indexOf('@') < 1){ say('We need a valid email address — it\'s how you sign in.', 'bad'); return; }
   try{
-    const res = await api('join', {name, email:$('jnEmail').value.trim()});
-    ME = {name:res.name, pin:res.pin};
+    const res = await api('join', {name, email});
+    ME = {name:res.email, pin:res.pin};
     store.set('svfc_lps', JSON.stringify(ME));
-    say('You\'re in. Your PIN is <b>'+res.pin+'</b> — write it down, you\'ll need it to change your pick.', 'good');
+    say('You\'re in, '+res.name+'. Your PIN is <b>'+res.pin+'</b> — it\'s also on its way to your inbox.', 'good');
     await refresh();
+  }catch(err){ say(err.message, 'bad'); }
+});
+
+$('btnForgot').addEventListener('click', async (e)=>{
+  e.preventDefault();
+  const email = $('inName').value.trim();
+  if(!email || email.indexOf('@') < 1){ say('Put your email address in the box above first.', 'bad'); return; }
+  try{
+    const res = await api('sendpin', {email});
+    say(res.message, 'good');
   }catch(err){ say(err.message, 'bad'); }
 });
 
@@ -774,7 +789,7 @@ $('btnSwitch').addEventListener('click', ()=>{
   signOut();
   $('inName').value = '';
   $('inPin').value = '';
-  say('Signed out. Sign in with another name and PIN, or enter the game.');
+  say('Signed out. Sign in with another email and PIN, or enter the game.');
 });
 
 $('btnAdmin').addEventListener('click', ()=>{
