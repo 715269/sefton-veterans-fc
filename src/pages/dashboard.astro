@@ -13,6 +13,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { getResults } from '../lib/season.js';
 import { TEAMS } from '../lib/teams.js';
+import clubBadge from '../assets/club-badge.png';
 
 const results = await getResults();
 
@@ -103,9 +104,134 @@ const matches = results.map((match) => ({
   ...match,
   forumText: forumText(match),
 }));
+
+// Veterans fixtures land on Friday, Saturday or Sunday — occasionally a
+// Friday night game, usually Saturday. All three are folded into one
+// "weekend", keyed on that weekend's Saturday date, so a Friday-night
+// fixture and a Sunday fixture in the same round of games end up in the
+// same round-up rather than two. A match on any other day of the week
+// (a rearranged midweek fixture) gets a weekend of its own, keyed on its
+// own date, rather than being folded into a neighbouring weekend it
+// wasn't really part of.
+function weekendKeyFor(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay(); // 0 = Sunday ... 5 = Friday, 6 = Saturday
+  const offset = day === 5 ? 1 : day === 6 ? 0 : day === 0 ? -1 : null;
+  if (offset === null) return dateStr;
+  const sat = new Date(d);
+  sat.setDate(d.getDate() + offset);
+  return sat.toISOString().slice(0, 10);
+}
+
+function weekendRangeLabel(dates) {
+  const sorted = [...dates].sort();
+  const first = new Date(sorted[0] + 'T00:00:00');
+  const last = new Date(sorted[sorted.length - 1] + 'T00:00:00');
+  const opts = { day: 'numeric', month: 'short' };
+  if (sorted[0] === sorted[sorted.length - 1]) {
+    return first.toLocaleDateString('en-GB', { ...opts, year: 'numeric' });
+  }
+  // Same weekend nearly always falls in the same month, but cover the rare
+  // case (a Friday at the very end of one month, Sunday at the start of the
+  // next) by only dropping the month from the first date when it matches.
+  const sameMonth = first.getMonth() === last.getMonth();
+  const firstLabel = first.toLocaleDateString('en-GB', sameMonth ? { day: 'numeric' } : opts);
+  const lastLabel = last.toLocaleDateString('en-GB', { ...opts, year: 'numeric' });
+  return `${firstLabel}–${lastLabel}`;
+}
+
+const OUTCOME_EMOJI = { Win: '✅', Draw: '➖', Loss: '❌' };
+
+// Which accounts to tag depends on both the team AND whether this was
+// actually a league fixture — tagging the Cheshire & Wirral league on a
+// friendly against a non-league side, or the Liverpool league on a cup tie,
+// would be wrong, not just unnecessary. ALWAYS_TAGS are the team's own
+// account, relevant whenever they played regardless of competition.
+// LEAGUE_ONLY_TAGS only apply when match.type genuinely says "league".
+const ALWAYS_TAGS = {
+  'Open Age': ['@sefton_oa'],
+};
+const LEAGUE_ONLY_TAGS = {
+  'Over 35s': ['@chesterwirralfl'],
+  'Open Age': ['@liverpoolfl'],
+};
+
+function tagsFor(match) {
+  const always = ALWAYS_TAGS[match.team] || [];
+  const isLeague = String(match.type || '').toLowerCase().includes('league');
+  const leagueOnly = isLeague ? (LEAGUE_ONLY_TAGS[match.team] || []) : [];
+  return [...always, ...leagueOnly];
+}
+
+// The actual link belongs in the Instagram bio, not the caption — Instagram
+// has never made a URL inside a caption clickable, so a bare address here
+// would just sit there unusable. Point people at /fixtures from the bio.
+
+function weekendCaption(group) {
+  const lines = [];
+  lines.push(`🏆 WEEKEND ROUND-UP — ${weekendRangeLabel(group.map((m) => m.date))}`);
+  lines.push('');
+
+  const allTags = [];
+  group.forEach((match) => {
+    const emoji = OUTCOME_EMOJI[match.outcome] || '⚽';
+    const typeSuffix = match.type ? ` — ${match.type}` : '';
+    lines.push(`${emoji} ${match.team}: ${match.team} ${match.result} ${match.opponent}${typeSuffix}`);
+    if (match.scorers && match.scorers.length) {
+      lines.push(`   Scorers: ${match.scorers.join(', ')}`);
+    }
+    if (match.detail && match.detail.motm) {
+      lines.push(`   MOTM: ${readable(match.detail.motm)}`);
+    }
+    tagsFor(match).forEach((t) => { if (!allTags.includes(t)) allTags.push(t); });
+  });
+
+  // Only ever the accounts genuinely relevant to what was actually played
+  // this weekend — a weekend of nothing but friendlies gets no league tags
+  // at all, rather than tagging them out of habit.
+  if (allTags.length) {
+    lines.push('');
+    lines.push(allTags.join(' '));
+  }
+
+  lines.push('');
+  lines.push('🔗 Full match reports — link in bio');
+  lines.push('');
+  lines.push('#SeftonVeteransFC #GrassrootsFootball #VeteransFootball');
+  return lines.join('\n');
+}
+
+// Newest weekend first, matching the match list below it. Object.groupBy
+// isn't reliably available in every Node version this site might build
+// under, so a plain Map keeps this working everywhere.
+const weekendGroups = new Map();
+for (const match of matches) {
+  const key = weekendKeyFor(match.date);
+  if (!weekendGroups.has(key)) weekendGroups.set(key, []);
+  weekendGroups.get(key).push(match);
+}
+const weekends = [...weekendGroups.entries()]
+  .sort((a, b) => b[0].localeCompare(a[0]))
+  .map(([key, group]) => ({
+    key,
+    label: weekendRangeLabel(group.map((m) => m.date)),
+    caption: weekendCaption(group),
+    teams: group.map((m) => m.team),
+    graphicMatches: group.map((m) => ({
+      team: m.team,
+      numeral: m.team === 'Open Age' ? 'OA' : m.team.replace(/\D/g, ''),
+      result: m.result,
+      opponent: m.opponent,
+      type: m.type || '',
+      scorers: m.scorers && m.scorers.length ? m.scorers.join(', ') : '',
+      motm: (m.detail && m.detail.motm) ? readable(m.detail.motm) : null,
+    })),
+  }));
 ---
 
 <BaseLayout title="Dashboard" description="Match reports, ready to post.">
+  <div id="page-assets" data-badge={clubBadge.src} hidden></div>
+
   <section class="hero-band">
     <div class="container">
       <h1>Match Reports Dashboard</h1>
@@ -113,7 +239,48 @@ const matches = results.map((match) => ({
     </div>
   </section>
 
-  <section class="section-padded container">
+  <section class="section-padded container tabs-section">
+    <div class="filter-row" id="view-tabs" role="tablist" aria-label="Choose view">
+      <button type="button" class="filter-btn" data-view="forum" aria-pressed="true" role="tab">Forum</button>
+      <button type="button" class="filter-btn" data-view="instagram" aria-pressed="false" role="tab">Instagram</button>
+    </div>
+  </section>
+
+  {weekends.length > 0 && (
+    <section id="view-instagram" class="section-padded container" hidden>
+      <h2>Weekend Round-ups</h2>
+      <p class="muted small">
+        One combined post per weekend, every team that played folded into it —
+        ready for Instagram.
+      </p>
+
+      <div class="weekend-list">
+        {weekends.map((wknd, i) => (
+          <article class="weekend-card">
+            <div class="weekend-card-head">
+              <h3>{wknd.label}</h3>
+              <span class="weekend-teams">{wknd.teams.join(' · ')}</span>
+            </div>
+            <pre class="forum-text ig-text" id={`ig-text-${i}`}>{wknd.caption}</pre>
+            <div class="weekend-actions">
+              <button type="button" class="copy-btn" data-copy-target={`ig-text-${i}`}>
+                Copy for Instagram
+              </button>
+              <button
+                type="button"
+                class="download-btn"
+                data-graphic={JSON.stringify({ label: wknd.label, matches: wknd.graphicMatches })}
+              >
+                Download graphic
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )}
+
+  <section id="view-forum" class="section-padded container">
     <div class="filter-row" id="team-filter" role="group" aria-label="Filter by team">
       <button type="button" class="filter-btn" data-team="" aria-pressed="true">All teams</button>
       {TEAMS.map((t) => (
@@ -179,6 +346,23 @@ const matches = results.map((match) => ({
     });
   });
 
+  // Forum and Instagram are two different jobs on this page — reading a
+  // string of weekend captions and reading a string of individual match
+  // reports at the same time is what got hard to follow, so only one shows
+  // at once, the same toggle pattern as the team filter above.
+  const viewTabs = document.querySelectorAll('#view-tabs .filter-btn');
+  const viewForum = document.getElementById('view-forum');
+  const viewInstagram = document.getElementById('view-instagram');
+
+  viewTabs.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const view = btn.getAttribute('data-view');
+      viewTabs.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      if (viewForum) viewForum.hidden = view !== 'forum';
+      if (viewInstagram) viewInstagram.hidden = view !== 'instagram';
+    });
+  });
+
   // Clipboard API needs a secure context (HTTPS or localhost). Both apply
   // here, but the fallback covers anything unexpected rather than leaving
   // the button silently doing nothing.
@@ -208,6 +392,194 @@ const matches = results.map((match) => ({
         btn.textContent = original;
         btn.disabled = false;
       }, 1500);
+    });
+  });
+
+  // A standard Instagram feed post can't be text-only — it needs an image
+  // attached, the caption is secondary. This draws a plain branded graphic
+  // with the same information as the caption above it, so there's always
+  // something to attach even with no matchday photo to hand.
+  //
+  // 1080×1350 rather than a square — Instagram's own recommended portrait
+  // size for a feed post, and it gives four teams' worth of detail room to
+  // breathe without cramming.
+  function fitFontSize(ctx, text, maxWidth, maxSize, weight) {
+    let size = maxSize;
+    while (size > 20) {
+      ctx.font = `${weight} ${size}px Arial, sans-serif`;
+      if (ctx.measureText(text).width <= maxWidth) return size;
+      size -= 2;
+    }
+    return size;
+  }
+
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      if (!src) { reject(new Error('No badge URL available.')); return; }
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Badge image failed to load.'));
+      img.src = src;
+    });
+  }
+
+  async function drawWeekendGraphic(data) {
+    const W = 1080;
+    const H = 1350;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, W, H);
+
+    // The same navy-and-blue-glow the team tiles use elsewhere on the site,
+    // rather than flat navy — this was the thing making the graphic look
+    // plain next to everything else. A canvas radial gradient is the
+    // closest equivalent to the tiles' CSS radial-gradient glow.
+    const glow = ctx.createRadialGradient(W * 0.78, H * 0.06, 0, W * 0.78, H * 0.06, W * 0.9);
+    glow.addColorStop(0, 'rgba(35, 35, 224, 0.45)');
+    glow.addColorStop(1, 'rgba(35, 35, 224, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = '#2323e0';
+    ctx.fillRect(0, 0, W, 14);
+
+    // Genuine margin above the badge, not a tight fit — a portrait post
+    // like this only ever gets centre-cropped to a square in the profile
+    // GRID view, which is an Instagram behaviour rather than anything
+    // wrong with the file, but there's no reason not to leave real breathing
+    // room here regardless.
+    const badgeUrl = document.getElementById('page-assets')?.dataset.badge || '';
+    let badgeBottom = 130;
+    try {
+      const badge = await loadImage(badgeUrl);
+      const badgeHeight = 130;
+      const badgeWidth = badgeHeight * (badge.width / badge.height);
+      ctx.drawImage(badge, (W - badgeWidth) / 2, 90, badgeWidth, badgeHeight);
+      badgeBottom = 90 + badgeHeight;
+    } catch (err) {
+      badgeBottom = 130;
+    }
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#93c5fd';
+    ctx.font = '700 28px Arial, sans-serif';
+    ctx.fillText('SEFTON VETERANS FC', W / 2, badgeBottom + 40);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '800 56px Arial, sans-serif';
+    ctx.fillText('WEEKEND ROUND-UP', W / 2, badgeBottom + 110);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '400 30px Arial, sans-serif';
+    ctx.fillText(data.label, W / 2, badgeBottom + 155);
+
+    const dividerY = badgeBottom + 195;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.beginPath();
+    ctx.moveTo(140, dividerY);
+    ctx.lineTo(W - 140, dividerY);
+    ctx.stroke();
+
+    const leftEdge = 140;
+    const rightEdge = W - 140;
+    // Room reserved on the right for the ghosted numeral, so it never
+    // fights the text for space — same logic as the site's own tiles,
+    // where the numeral sits behind everything as a watermark rather than
+    // in the way of it.
+    const maxLineWidth = rightEdge - leftEdge - 200;
+    const blockHeight = 195;
+    let y = dividerY + 90;
+
+    data.matches.forEach((m) => {
+      // The numeral drawn first, so the text sits on top of it — exactly
+      // the same layering as a team tile.
+      ctx.textAlign = 'right';
+      ctx.font = '800 150px Arial, sans-serif';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+      ctx.strokeText(m.numeral, rightEdge, y + 95);
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#93c5fd';
+      ctx.font = '700 26px Arial, sans-serif';
+      const typeLabel = m.type ? `${m.team.toUpperCase()} \u00b7 ${m.type.toUpperCase()}` : m.team.toUpperCase();
+      ctx.fillText(typeLabel, leftEdge, y);
+
+      // Long opponent names ("Ellesmere Port Red Lions FC Vets") would
+      // otherwise run off the edge of the graphic — shrink to fit rather
+      // than clip or wrap awkwardly.
+      const scoreLine = `${m.team} ${m.result} ${m.opponent}`;
+      const scoreSize = fitFontSize(ctx, scoreLine, maxLineWidth, 40, 700);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `700 ${scoreSize}px Arial, sans-serif`;
+      ctx.fillText(scoreLine, leftEdge, y + 50);
+
+      let detailY = y + 90;
+
+      if (m.scorers) {
+        const scorersLine = `Scorers: ${m.scorers}`;
+        const scorersSize = fitFontSize(ctx, scorersLine, maxLineWidth, 24, 400);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = `400 ${scorersSize}px Arial, sans-serif`;
+        ctx.fillText(scorersLine, leftEdge, detailY);
+        detailY += 32;
+      }
+
+      if (m.motm) {
+        const motmLine = `\u2b50 MOTM: ${m.motm}`;
+        const motmSize = fitFontSize(ctx, motmLine, maxLineWidth, 24, 400);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = `400 ${motmSize}px Arial, sans-serif`;
+        ctx.fillText(motmLine, leftEdge, detailY);
+      }
+
+      y += blockHeight;
+    });
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#64748b';
+    ctx.font = '400 24px Arial, sans-serif';
+    ctx.fillText('seftonveteransfc.co.uk', W / 2, H - 50);
+
+    return canvas;
+  }
+
+  document.querySelectorAll('.download-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      let data;
+      try {
+        data = JSON.parse(btn.getAttribute('data-graphic'));
+      } catch (err) {
+        return;
+      }
+
+      const original = btn.textContent;
+      btn.textContent = 'Preparing…';
+      btn.disabled = true;
+
+      const canvas = await drawWeekendGraphic(data);
+      const slug = data.label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '') || 'roundup';
+
+      canvas.toBlob((blob) => {
+        btn.textContent = original;
+        btn.disabled = false;
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `sefton-veterans-weekend-${slug}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }, 'image/png');
     });
   });
 </script>
@@ -260,6 +632,45 @@ const matches = results.map((match) => ({
     display: flex;
     flex-direction: column;
     gap: 1rem;
+  }
+
+  .weekend-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.25rem;
+  }
+
+  .weekend-card {
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid;
+    border-image: linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045) 1;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    background: white;
+  }
+
+  .weekend-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .weekend-card-head h3 {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+
+  .weekend-teams {
+    font-size: 0.8rem;
+    color: #64748b;
+  }
+
+  .ig-text {
+    margin-bottom: 0.75rem;
   }
 
   .match-card {
@@ -339,5 +750,31 @@ const matches = results.map((match) => ({
   .copy-btn:disabled {
     background: #16a34a;
     cursor: default;
+  }
+
+  .weekend-actions {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .download-btn {
+    background: white;
+    color: var(--color-navy);
+    border: 1.5px solid #e2e8f0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.5rem 1.1rem;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .download-btn:hover {
+    border-color: var(--color-blue);
+    color: var(--color-blue);
+  }
+
+  .tabs-section {
+    padding-bottom: 0;
   }
 </style>

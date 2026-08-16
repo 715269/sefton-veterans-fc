@@ -1,0 +1,888 @@
+---
+// src/pages/lps/index.astro
+//
+// Last Person Standing. The game itself is self-contained — all of its
+// styling is scoped under .lps so it can keep its own dark treatment
+// without leaking into the rest of the site.
+//
+// The Apps Script URL below must match the CURRENT deployment. If the
+// backend is redeployed, paste the new /exec URL in and push.
+
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Last Person Standing">
+  <div class="lps">
+    <div class="wrap">
+    <div class="brand">
+        <img src="/images/logo.png" alt="Sefton Veterans FC crest">
+        <p class="eyebrow">Sefton Veterans FC</p>
+      </div>
+      <h1>Last Person<br>Standing</h1>
+    
+      <div class="clock" id="clock">
+        <div class="clock-label" id="clockLabel">Loading</div>
+        <div class="clock-time" id="clockTime">--:--:--</div>
+        <div class="clock-sub" id="clockSub"></div>
+      </div>
+    
+      <div class="survivors">
+        <div class="survivors-count" id="survivorCount">&nbsp;</div>
+        <div class="pips" id="pips"></div>
+      </div>
+    
+      <nav role="tablist">
+        <button role="tab" aria-selected="true" data-tab="pick">Your pick</button>
+        <button role="tab" aria-selected="false" data-tab="board">The board</button>
+        <button role="tab" aria-selected="false" data-tab="rules">Rules</button>
+      </nav>
+    
+      <div id="msg"></div>
+    
+      <!-- ============ PICK ============ -->
+      <section id="tab-pick">
+    
+        <div class="card" id="signinCard">
+          <h2>Sign in</h2>
+          <label for="inName">Email address</label>
+          <input id="inName" type="email" autocomplete="email" placeholder="The one you entered with">
+          <label for="inPin">PIN</label>
+          <input id="inPin" inputmode="numeric" maxlength="4" placeholder="4 digits">
+          <button class="btn" id="btnSignin">Sign in</button>
+          <p class="muted" style="margin:14px 0 6px">
+            <a href="#" id="btnForgot" style="color:var(--flood)">Forgotten your PIN?</a>
+          </p>
+          <p class="muted" style="margin:14px 0 6px">Not entered yet?</p>
+          <button class="btn ghost" id="btnShowJoin">Enter the game</button>
+        </div>
+    
+        <div class="card hidden" id="joinCard">
+          <h2>Enter the game</h2>
+          <label for="jnName">Your name</label>
+          <input id="jnName" autocomplete="name" placeholder="First and last name">
+          <label for="jnEmail">Email address</label>
+          <input id="jnEmail" type="email" autocomplete="email" placeholder="You'll sign in with this">
+          <button class="btn" id="btnJoin">Enter</button>
+          <button class="btn ghost" id="btnCancelJoin" style="margin-top:10px">Back</button>
+        </div>
+    
+        <div id="pickArea" class="hidden">
+    
+          <div class="card" id="statusCard"></div>
+    
+          <div id="fixtures"></div>
+    
+          <div class="card" id="burntCard">
+            <h2>Teams you've used</h2>
+            <div id="burntList"></div>
+          </div>
+    
+          <button class="btn ghost" id="btnSwitch">Sign out / switch player</button>
+    
+        </div>
+      </section>
+    
+      <!-- ============ BOARD ============ -->
+      <section id="tab-board" class="hidden">
+        <div class="card">
+          <h2>Everyone</h2>
+          <div id="board"><p class="muted">Loading…</p></div>
+        </div>
+      </section>
+    
+      <!-- ============ RULES ============ -->
+      <section id="tab-rules" class="hidden">
+        <div class="card rules">
+          <h2>How it works</h2>
+          <ul>
+            <li>Every gameweek, pick <b>one Premier League team to win</b>.</li>
+            <li>They win, you go through. <b>A draw puts you out</b>, same as a defeat.</li>
+            <li>Once you've used a team, <b>you can't use them again</b> until everyone's burnt through all twenty.</li>
+            <li>Picks lock at the <b>first kick-off</b> of the gameweek. No pick means you're out, so don't leave it to Saturday morning.</li>
+            <li>If your team's match is <b>postponed</b>, you survive the round and get that team back.</li>
+            <li>If everyone left goes out in the <b>same</b> gameweek, nobody goes out — the round is void and you all carry on.</li>
+            <li>Everyone's picks stay hidden until the deadline passes. Then the board shows the lot.</li>
+            <li><b>One life.</b> Last one standing takes the pot.</li>
+          </ul>
+        </div>
+      </section>
+    
+      <footer>
+        <button id="btnAdmin">Sefton Veterans FC</button>
+      </footer>
+    
+      <!-- ============ ADMIN ============ -->
+      <section id="tab-admin" class="hidden">
+    
+        <div class="card">
+          <h2>Admin</h2>
+          <label for="adToken">Admin token</label>
+          <input id="adToken" type="password" placeholder="Not stored — type it each visit">
+          <button class="btn" id="btnAdLoad">Unlock</button>
+          <pre id="adOut" class="muted" style="white-space:pre-wrap;margin-top:14px"></pre>
+        </div>
+    
+        <div id="adPanel" class="hidden">
+    
+          <div class="card">
+            <h2>Entries</h2>
+            <p id="adEntries" class="muted" style="margin:0 0 12px"></p>
+            <div class="row">
+              <button class="btn ghost" data-entries="open">Open entries</button>
+              <button class="btn ghost" data-entries="running">Close entries</button>
+            </div>
+          </div>
+    
+          <div class="card">
+            <h2>The week</h2>
+            <div class="row" style="margin-bottom:10px">
+              <button class="btn ghost" data-admin="sync">Sync fixtures</button>
+              <button class="btn ghost" data-admin="resolve">Resolve round</button>
+            </div>
+            <label for="adGW">Current gameweek</label>
+            <input id="adGW" inputmode="numeric" placeholder="Leave blank for the live one">
+            <button class="btn ghost" data-admin="setgw">Set gameweek</button>
+          </div>
+    
+          <div class="card">
+            <h2>Add a player</h2>
+            <label for="adNewName">Name</label>
+            <input id="adNewName" placeholder="First and last name">
+            <label for="adNewEmail">Email (optional)</label>
+            <input id="adNewEmail" type="email" placeholder="Leave blank if they haven't got one">
+            <button class="btn ghost" id="btnAdAdd">Enter them</button>
+          </div>
+    
+          <div class="card">
+            <h2>Players</h2>
+            <p id="adCounts" class="muted" style="margin:0 0 6px"></p>
+            <div id="adPlayers"></div>
+          </div>
+    
+        </div>
+      </section>
+    </div>
+  </div>
+</BaseLayout>
+
+<style is:global>
+.lps{
+    --ink:#0B131C;
+    --panel:#131F2B;
+    --panel-2:#182836;
+    --line:#22323F;
+    --chalk:#E9EEF2;
+    --mute:#8CA1AF;
+    --flood:#F5C451;
+    --live:#46C08A;
+    --out:#E0424C;
+
+    --display:'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --body:'Karla', system-ui, sans-serif;
+    --data:'IBM Plex Mono', ui-monospace, monospace;
+  }.lps *{box-sizing:border-box}.lps html,.lps{
+    background:var(--ink);
+    color:var(--chalk);
+    font-family:var(--body);
+    font-size:16px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    /* faint floodlight wash from the top */
+    background-image:radial-gradient(120% 60% at 50% -10%, rgba(245,196,81,.13), transparent 60%);
+    background-attachment:scroll;
+  }.lps .wrap{max-width:640px;margin:0 auto;padding:20px 16px 64px}.lps /* ---------- header ---------- */
+
+  .eyebrow{
+    font-family:var(--display);
+    text-transform:uppercase;
+    letter-spacing:.18em;
+    font-size:13px;
+    color:var(--flood);
+    margin:0;
+  }.lps h1{
+    font-family:var(--display);
+    font-weight:700;
+    text-transform:uppercase;
+    font-size:clamp(38px,11vw,58px);
+    line-height:.92;
+    letter-spacing:-.01em;
+    margin:6px 0 0;
+  }.lps /* ---------- the clock: the signature element ---------- */
+
+  .clock{
+    margin-top:18px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:
+      linear-gradient(180deg, var(--panel-2), var(--panel));
+    padding:16px 18px;
+    position:relative;
+    overflow:hidden;
+  }.lps .clock::before{
+    content:'';
+    position:absolute;
+    inset:0 0 auto 0;
+    height:2px;
+    background:linear-gradient(90deg, transparent, var(--flood), transparent);
+  }.lps .clock-label{
+    font-family:var(--display);
+    text-transform:uppercase;
+    letter-spacing:.16em;
+    font-size:12px;
+    color:var(--mute);
+  }.lps .clock-time{
+    font-family:var(--data);
+    font-weight:600;
+    font-size:clamp(30px,9vw,44px);
+    letter-spacing:.04em;
+    line-height:1.1;
+    margin-top:2px;
+    font-variant-numeric:tabular-nums;
+  }.lps .clock-sub{font-size:14px;color:var(--mute);margin-top:2px}.lps .clock.locked .clock-time{color:var(--out)}.lps .clock.urgent .clock-time{color:var(--flood)}.lps /* ---------- survivor strip ---------- */
+
+  .survivors{margin-top:14px}.lps .survivors-count{
+    font-family:var(--display);
+    text-transform:uppercase;
+    letter-spacing:.12em;
+    font-size:13px;
+    color:var(--mute);
+  }.lps .survivors-count b{color:var(--chalk);font-weight:600}.lps .pips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.lps .pip{width:9px;height:9px;border-radius:50%;background:var(--live)}.lps .pip.gone{background:var(--line)}.lps /* ---------- tabs ---------- */
+
+  nav{
+    display:flex;
+    gap:2px;
+    margin:22px 0 18px;
+    border-bottom:1px solid var(--line);
+  }.lps nav button{
+    flex:1;
+    background:none;
+    border:0;
+    border-bottom:2px solid transparent;
+    color:var(--mute);
+    font-family:var(--display);
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    font-size:15px;
+    padding:10px 4px;
+    cursor:pointer;
+    margin-bottom:-1px;
+  }.lps nav button[aria-selected="true"]{color:var(--flood);border-bottom-color:var(--flood)}.lps nav button:focus-visible{outline:2px solid var(--flood);outline-offset:-2px}.lps /* ---------- generic bits ---------- */
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:16px;
+    margin-bottom:14px;
+  }.lps h2{
+    font-family:var(--display);
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    font-size:16px;
+    font-weight:600;
+    margin:0 0 12px;
+    color:var(--mute);
+  }.lps label{
+    display:block;
+    font-family:var(--display);
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    font-size:13px;
+    color:var(--mute);
+    margin-bottom:5px;
+  }.lps input{
+    width:100%;
+    background:var(--ink);
+    border:1px solid var(--line);
+    border-radius:3px;
+    color:var(--chalk);
+    font-family:var(--body);
+    font-size:16px;
+    padding:12px;
+    margin-bottom:12px;
+  }.lps input:focus{outline:2px solid var(--flood);outline-offset:-1px;border-color:transparent}.lps .btn{
+    display:block;
+    width:100%;
+    background:var(--flood);
+    color:var(--ink);
+    border:0;
+    border-radius:3px;
+    font-family:var(--display);
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    font-size:17px;
+    padding:14px;
+    cursor:pointer;
+  }.lps .btn.ghost{background:none;color:var(--mute);border:1px solid var(--line)}.lps .btn.danger{background:var(--out);color:#fff}.lps .btn:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}.lps .btn:disabled{opacity:.4;cursor:not-allowed}.lps .row{display:flex;gap:10px}.lps .row>*{flex:1}.lps .msg{
+    border-left:3px solid var(--flood);
+    background:var(--panel-2);
+    padding:10px 12px;
+    font-size:15px;
+    margin-bottom:14px;
+    border-radius:0 3px 3px 0;
+  }.lps .msg.bad{border-left-color:var(--out)}.lps .msg.good{border-left-color:var(--live)}.lps .muted{color:var(--mute);font-size:14px}.lps /* ---------- fixtures ---------- */
+
+  .daygroup{margin-bottom:20px}.lps .dayhead{
+    font-family:var(--display);
+    text-transform:uppercase;
+    letter-spacing:.14em;
+    font-size:13px;
+    color:var(--flood);
+    border-bottom:1px solid var(--line);
+    padding-bottom:5px;
+    margin-bottom:10px;
+  }.lps .fixture{
+    display:grid;
+    grid-template-columns:1fr auto 1fr;
+    align-items:stretch;
+    gap:6px;
+    margin-bottom:6px;
+  }.lps .side{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:3px;
+    color:var(--chalk);
+    font-family:var(--body);
+    font-weight:500;
+    font-size:15px;
+    text-align:left;
+    padding:12px 10px;
+    cursor:pointer;
+    line-height:1.25;
+    min-height:52px;
+  }.lps .side.away{text-align:right}.lps .side .tla{
+    display:block;
+    font-family:var(--data);
+    font-size:11px;
+    letter-spacing:.08em;
+    color:var(--mute);
+    margin-top:2px;
+  }.lps .side:hover:not(:disabled){border-color:var(--flood)}.lps .side:focus-visible{outline:2px solid var(--flood);outline-offset:1px}.lps .side.chosen{
+    background:var(--flood);
+    color:var(--ink);
+    border-color:var(--flood);
+    font-weight:700;
+  }.lps .side.chosen .tla{color:rgba(11,19,28,.7)}.lps .side.burnt{
+    opacity:.35;
+    cursor:not-allowed;
+    text-decoration:line-through;
+    text-decoration-color:var(--out);
+    text-decoration-thickness:2px;
+  }.lps .ko{
+    display:flex;
+    align-items:center;
+    font-family:var(--data);
+    font-size:12px;
+    color:var(--mute);
+    padding:0 4px;
+    font-variant-numeric:tabular-nums;
+  }.lps /* ---------- burnt teams ---------- */
+
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.lps .chip{
+    font-family:var(--data);
+    font-size:12px;
+    letter-spacing:.06em;
+    border:1px solid var(--line);
+    color:var(--mute);
+    padding:4px 8px;
+    border-radius:2px;
+  }.lps .meter{height:3px;background:var(--line);margin-top:12px;border-radius:2px;overflow:hidden}.lps .meter i{display:block;height:100%;background:var(--flood)}.lps /* ---------- board ---------- */
+
+  .player{
+    border-bottom:1px solid var(--line);
+    padding:12px 0;
+  }.lps .player:last-child{border-bottom:0}.lps .player-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}.lps .player-name{font-weight:700;font-size:16px}.lps .player.out .player-name{color:var(--mute);text-decoration:line-through}.lps .status{
+    font-family:var(--display);
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    font-size:12px;
+    white-space:nowrap;
+  }.lps .status.alive{color:var(--live)}.lps .status.out{color:var(--out)}.lps .history{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}.lps .hchip{
+    font-family:var(--data);
+    font-size:11px;
+    padding:3px 6px;
+    border-radius:2px;
+    background:var(--panel-2);
+    color:var(--mute);
+    border-left:2px solid var(--line);
+  }.lps .hchip.win{border-left-color:var(--live);color:var(--chalk)}.lps .hchip.out{border-left-color:var(--out)}.lps /* ---------- rules ---------- */
+
+  .rules li{margin-bottom:10px}.lps .rules b{color:var(--flood);font-weight:700}.lps /* ---------- admin ---------- */
+
+  .arow{
+    border-bottom:1px solid var(--line);
+    padding:10px 0;
+  }.lps .arow:last-child{border-bottom:0}.lps .arow-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.lps .arow-name{font-weight:700;font-size:15px}.lps .arow-name.out{color:var(--mute);text-decoration:line-through}.lps .arow-meta{font-size:13px;color:var(--mute);margin-top:2px;word-break:break-all}.lps .arow-btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.lps .mini{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--mute);
+    border-radius:2px;
+    font-family:var(--display);
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-size:12px;
+    padding:6px 10px;
+    cursor:pointer;
+  }.lps .mini:hover{border-color:var(--flood);color:var(--chalk)}.lps .mini.on{background:var(--live);border-color:var(--live);color:var(--ink);font-weight:700}.lps .tag{
+    font-family:var(--display);
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-size:11px;
+    white-space:nowrap;
+  }.lps .tag.yes{color:var(--live)}.lps .tag.no{color:var(--mute)}.lps .brand{display:flex;align-items:center;gap:12px}.lps .brand img{width:52px;height:52px;object-fit:contain;flex:0 0 52px;overflow:hidden}.lps .brand .eyebrow{margin:0}.lps .hidden{display:none}.lps footer{
+    margin-top:28px;
+    text-align:center;
+    font-family:var(--display);
+    text-transform:uppercase;
+    letter-spacing:.16em;
+    font-size:12px;
+    color:var(--line);
+  }.lps footer button{
+    background:none;border:0;color:inherit;font:inherit;
+    letter-spacing:inherit;cursor:pointer;padding:4px;
+  }
+
+  @media (prefers-reduced-motion:reduce){.lps *{animation:none!important;transition:none!important}
+  }
+
+</style>
+
+<script>
+
+// ================================================================
+// CONFIG — the Apps Script web app URL
+// ================================================================
+const API_URL = 'https://script.google.com/macros/s/AKfycby08mTJmk0P-WOWafu7LINDUANz_E4TC8DuAoIlRlJCLp6XRYeeCFQklrmPVTuhtgQvhw/exec';
+
+// ================================================================
+
+let STATE = null;
+let ME = null;          // {name, pin}
+let tickHandle = null;
+
+// --- tiny storage wrapper (fails silently in sandboxed previews) ---
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch(e){} },
+  del(k){ try { localStorage.removeItem(k); } catch(e){} }
+};
+
+const $ = id => document.getElementById(id);
+
+async function api(action, payload){
+  const body = Object.assign({action}, payload || {});
+  const res = await fetch(API_URL, {
+    method:'POST',
+    // text/plain keeps this a "simple" request, which avoids the
+    // CORS preflight that Apps Script won't answer
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(body),
+    redirect:'follow'
+  });
+  const json = await res.json();
+  if(!json.ok) throw new Error(json.error || 'Something went wrong');
+  return json.data;
+}
+
+function say(text, kind){
+  $('msg').innerHTML = text ? '<div class="msg '+(kind||'')+'">'+text+'</div>' : '';
+  if(text) window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// ---------------- clock ----------------
+
+function renderClock(){
+  const c = $('clock');
+  if(!STATE){ return; }
+
+  if(STATE.gameStatus === 'finished'){
+    c.className = 'clock';
+    $('clockLabel').textContent = 'Game over';
+    $('clockTime').textContent = 'WON';
+    $('clockSub').textContent = 'That\'s the season done.';
+    return;
+  }
+  if(!STATE.deadline){
+    $('clockLabel').textContent = 'Gameweek ' + STATE.gameweek;
+    $('clockTime').textContent = '--:--:--';
+    $('clockSub').textContent = 'No fixtures loaded yet.';
+    return;
+  }
+
+  const left = new Date(STATE.deadline).getTime() - Date.now();
+
+  if(left <= 0){
+    c.className = 'clock locked';
+    $('clockLabel').textContent = 'Gameweek ' + STATE.gameweek;
+    $('clockTime').textContent = 'LOCKED';
+    $('clockSub').textContent = 'Picks are in. Results follow the last whistle.';
+    return;
+  }
+
+  const d = Math.floor(left/86400000);
+  const h = Math.floor(left/3600000) % 24;
+  const m = Math.floor(left/60000) % 60;
+  const s = Math.floor(left/1000) % 60;
+  const pad = n => String(n).padStart(2,'0');
+
+  c.className = 'clock' + (left < 7200000 ? ' urgent' : '');
+  $('clockLabel').textContent = 'Gameweek ' + STATE.gameweek + ' locks in';
+  $('clockTime').textContent = (d>0 ? d+'d ' : '') + pad(h)+':'+pad(m)+':'+pad(s);
+  $('clockSub').textContent = new Date(STATE.deadline)
+    .toLocaleString('en-GB',{weekday:'long', day:'numeric', month:'long', hour:'2-digit', minute:'2-digit'});
+}
+
+function renderSurvivors(){
+  if(!STATE) return;
+  const alive = STATE.aliveCount, total = STATE.totalCount;
+  $('survivorCount').innerHTML = '<b>' + alive + '</b> of ' + total + ' still standing';
+  let pips = '';
+  for(let i=0;i<total;i++) pips += '<div class="pip'+(i<alive?'':' gone')+'"></div>';
+  $('pips').innerHTML = pips;
+}
+
+// ---------------- fixtures ----------------
+
+function renderFixtures(){
+  const wrap = $('fixtures');
+  if(!STATE.fixtures || !STATE.fixtures.length){
+    wrap.innerHTML = '<div class="card"><p class="muted">Fixtures for this gameweek aren\'t in yet. Check back shortly.</p></div>';
+    return;
+  }
+
+  const used = (STATE.me && STATE.me.usedTeams) || [];
+  const mine = STATE.me && STATE.me.pick ? STATE.me.pick.tla : null;
+  const locked = STATE.locked || (STATE.me && STATE.me.status !== 'alive');
+
+  // group by calendar day
+  const days = {};
+  STATE.fixtures.slice().sort((a,b)=> new Date(a.kickoff) - new Date(b.kickoff))
+    .forEach(f=>{
+      const key = new Date(f.kickoff).toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long'});
+      (days[key] = days[key] || []).push(f);
+    });
+
+  let html = '';
+  Object.keys(days).forEach(day=>{
+    html += '<div class="daygroup"><div class="dayhead">'+day+'</div>';
+    days[day].forEach(f=>{
+      const ko = new Date(f.kickoff).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+      html += '<div class="fixture">'
+        + sideBtn(f.homeTla, f.home, used, mine, locked, '')
+        + '<div class="ko">'+ko+'</div>'
+        + sideBtn(f.awayTla, f.away, used, mine, locked, 'away')
+        + '</div>';
+    });
+    html += '</div>';
+  });
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll('button[data-tla]').forEach(b=>{
+    b.addEventListener('click', ()=> submitPick(b.dataset.tla, b.dataset.team));
+  });
+}
+
+function sideBtn(tla, name, used, mine, locked, cls){
+  const burnt = used.indexOf(tla) !== -1 && tla !== mine;
+  const chosen = tla === mine;
+  const classes = ['side', cls, burnt?'burnt':'', chosen?'chosen':''].filter(Boolean).join(' ');
+  const dis = (burnt || locked) ? ' disabled' : '';
+  return '<button class="'+classes+'" data-tla="'+tla+'" data-team="'+name+'"'+dis+'>'
+    + name + '<span class="tla">' + tla + (chosen ? ' · YOUR PICK' : (burnt ? ' · USED' : '')) + '</span>'
+    + '</button>';
+}
+
+function renderStatus(){
+  const me = STATE.me;
+  const card = $('statusCard');
+  if(!me) return;
+
+  if(me.status !== 'alive'){
+    card.innerHTML = '<h2>'+me.name+'</h2><p><span class="status out">Knocked out</span> '
+      + (me.gwOut ? 'in gameweek ' + me.gwOut + '.' : '')
+      + '</p><p class="muted">Stick around — the board updates every week.</p>';
+    return;
+  }
+  if(me.pick){
+    card.innerHTML = '<h2>'+me.name+'</h2><p><span class="status alive">Still standing</span></p>'
+      + '<p style="margin:8px 0 0">Gameweek '+STATE.gameweek+': you\'re on <b>'+me.pick.team+'</b>.</p>'
+      + (STATE.locked ? '<p class="muted">Locked in.</p>' : '<p class="muted">You can change it until the deadline.</p>');
+  } else {
+    card.innerHTML = '<h2>'+me.name+'</h2><p><span class="status alive">Still standing</span></p>'
+      + '<p style="margin:8px 0 0">'
+      + (STATE.locked ? 'No pick submitted for gameweek '+STATE.gameweek+'.' : 'Pick your team for gameweek '+STATE.gameweek+' below.')
+      + '</p>';
+  }
+}
+
+function renderBurnt(){
+  const used = (STATE.me && STATE.me.usedTeams) || [];
+  const pct = Math.round(used.length/20*100);
+  $('burntList').innerHTML = used.length
+    ? '<div class="chips">' + used.map(t=>'<span class="chip">'+t+'</span>').join('') + '</div>'
+      + '<div class="meter"><i style="width:'+pct+'%"></i></div>'
+      + '<p class="muted" style="margin:8px 0 0">'+used.length+' of 20 used.</p>'
+    : '<p class="muted">None yet. All twenty available.</p>';
+}
+
+// ---------------- actions ----------------
+
+async function refresh(){
+  try{
+    const payload = ME ? {player:ME.name, pin:ME.pin} : {};
+    STATE = await api('state', payload);
+    renderClock(); renderSurvivors();
+    if(STATE.me){
+      $('signinCard').classList.add('hidden');
+      $('joinCard').classList.add('hidden');
+      $('pickArea').classList.remove('hidden');
+      renderStatus(); renderFixtures(); renderBurnt();
+    }
+  }catch(err){
+    if(String(err.message).match(/PIN|not found/i)){
+      signOut();
+      say('That email address and PIN didn\'t match. Try again.', 'bad');
+    } else {
+      say(err.message, 'bad');
+    }
+  }
+}
+
+async function submitPick(tla, team){
+  if(!confirm('Pick ' + team + ' for gameweek ' + STATE.gameweek + '?\n\nThat uses them up for the rest of the season.')) return;
+  try{
+    await api('pick', {player:ME.name, pin:ME.pin, team:tla});
+    say('You\'re on ' + team + ' for gameweek ' + STATE.gameweek + '.', 'good');
+    await refresh();
+  }catch(err){ say(err.message, 'bad'); }
+}
+
+function signOut(){
+  ME = null; STATE = null;
+  store.del('svfc_lps');
+  $('pickArea').classList.add('hidden');
+  $('signinCard').classList.remove('hidden');
+}
+
+async function loadBoard(){
+  try{
+    const rows = await api('leaderboard');
+    if(!rows.length){ $('board').innerHTML = '<p class="muted">Nobody has entered yet. Be the first.</p>'; return; }
+    $('board').innerHTML = rows.map(p=>{
+      const hist = p.picks.map(x=>
+        '<span class="hchip '+(x.result==='WIN'?'win':(x.result==='OUT'?'out':''))+'">GW'+x.gw+' '+x.team+'</span>'
+      ).join('');
+      return '<div class="player '+(p.status==='out'?'out':'')+'">'
+        + '<div class="player-top"><span class="player-name">'+p.name+'</span>'
+        + '<span class="status '+p.status+'">'+(p.status==='alive'?'In':'Out GW'+(p.gwOut||'?'))+'</span></div>'
+        + (hist ? '<div class="history">'+hist+'</div>' : '')
+        + '</div>';
+    }).join('');
+  }catch(err){ $('board').innerHTML = '<p class="muted">Couldn\'t load the board. '+err.message+'</p>'; }
+}
+
+// ---------------- wiring ----------------
+
+document.querySelectorAll('nav button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected', b===btn));
+    ['pick','board','rules'].forEach(t=>{
+      $('tab-'+t).classList.toggle('hidden', t !== btn.dataset.tab);
+    });
+    $('tab-admin').classList.add('hidden');
+    if(btn.dataset.tab === 'board') loadBoard();
+  });
+});
+
+$('btnShowJoin').addEventListener('click', ()=>{
+  $('signinCard').classList.add('hidden');
+  $('joinCard').classList.remove('hidden');
+});
+$('btnCancelJoin').addEventListener('click', ()=>{
+  $('joinCard').classList.add('hidden');
+  $('signinCard').classList.remove('hidden');
+});
+
+$('btnSignin').addEventListener('click', async ()=>{
+  const name = $('inName').value.trim(), pin = $('inPin').value.trim();
+  if(!name || !pin){ say('Email address and PIN both needed.', 'bad'); return; }
+  ME = {name, pin};
+  store.set('svfc_lps', JSON.stringify(ME));
+  say('');
+  await refresh();
+});
+
+$('btnJoin').addEventListener('click', async ()=>{
+  const name = $('jnName').value.trim();
+  const email = $('jnEmail').value.trim();
+  if(!name){ say('We need a name.', 'bad'); return; }
+  if(!email || email.indexOf('@') < 1){ say('We need a valid email address — it\'s how you sign in.', 'bad'); return; }
+  try{
+    const res = await api('join', {name, email});
+    ME = {name:res.email, pin:res.pin};
+    store.set('svfc_lps', JSON.stringify(ME));
+    say('You\'re in, '+res.name+'. Your PIN is <b>'+res.pin+'</b> — it\'s also on its way to your inbox.', 'good');
+    await refresh();
+  }catch(err){ say(err.message, 'bad'); }
+});
+
+$('btnForgot').addEventListener('click', async (e)=>{
+  e.preventDefault();
+  const email = $('inName').value.trim();
+  if(!email || email.indexOf('@') < 1){ say('Put your email address in the box above first.', 'bad'); return; }
+  try{
+    const res = await api('sendpin', {email});
+    say(res.message, 'good');
+  }catch(err){ say(err.message, 'bad'); }
+});
+
+$('btnSwitch').addEventListener('click', ()=>{
+  signOut();
+  $('inName').value = '';
+  $('inPin').value = '';
+  say('Signed out. Sign in with another email and PIN, or enter the game.');
+});
+
+$('btnAdmin').addEventListener('click', ()=>{
+  const t = $('tab-admin');
+  t.classList.toggle('hidden');
+  if(!t.classList.contains('hidden')) t.scrollIntoView({behavior:'smooth'});
+});
+
+// ---------------- admin ----------------
+
+let ADMIN = null;   // token, held in memory for this visit only
+
+function adOut(text){ $('adOut').textContent = text || ''; }
+
+async function adminApi(action, payload){
+  if(!ADMIN) throw new Error('Enter the admin token first.');
+  return api(action, Object.assign({adminToken:ADMIN}, payload || {}));
+}
+
+async function loadAdmin(){
+  try{
+    const d = await adminApi('players');
+
+    $('adEntries').textContent = d.entries === 'open'
+      ? 'Entries are OPEN — anyone can still join.'
+      : d.entries === 'running'
+        ? 'Entries are CLOSED. Gameweek ' + d.gameweek + ' is live.'
+        : 'Game marked finished.';
+
+    const alive = d.players.filter(p=>p.status==='alive');
+    const paid = d.players.filter(p=>p.paid);
+    const nopick = alive.filter(p=>!p.picked);
+    $('adCounts').textContent = d.players.length + ' entered · ' + alive.length
+      + ' still in · ' + paid.length + ' paid'
+      + (nopick.length ? ' · ' + nopick.length + ' yet to pick GW' + d.gameweek : ' · all picked');
+
+    $('adPlayers').innerHTML = d.players.map(p=>{
+      const key = p.email || p.name;
+      const pickTxt = p.picked
+        ? (p.pick ? 'GW' + d.gameweek + ': ' + p.pick : 'Picked')
+        : (p.status === 'alive' ? 'No pick yet' : '');
+      return '<div class="arow">'
+        + '<div class="arow-top">'
+        +   '<span class="arow-name '+(p.status==='out'?'out':'')+'">'+p.name+'</span>'
+        +   '<span class="tag '+(p.paid?'yes':'no')+'">'+(p.paid?'Paid':'Unpaid')+'</span>'
+        + '</div>'
+        + '<div class="arow-meta">'+(p.email || 'no email')
+        +   (pickTxt ? ' · ' + pickTxt : '')
+        +   (p.status==='out' ? ' · out GW'+(p.gwOut||'?') : '')
+        + '</div>'
+        + '<div class="arow-btns">'
+        +   '<button class="mini '+(p.paid?'on':'')+'" data-p="'+key+'" data-do="paid" data-v="'+(p.paid?'N':'Y')+'">'
+        +     (p.paid?'Mark unpaid':'Mark paid')+'</button>'
+        +   '<button class="mini" data-p="'+key+'" data-do="resendpin">Send PIN</button>'
+        +   (p.status==='alive'
+              ? '<button class="mini" data-p="'+key+'" data-do="knockout">Knock out</button>'
+              : '<button class="mini" data-p="'+key+'" data-do="revive">Put back in</button>')
+        + '</div>'
+        + '</div>';
+    }).join('');
+
+    $('adPlayers').querySelectorAll('button[data-do]').forEach(b=>{
+      b.addEventListener('click', ()=> adminRowAction(b.dataset.do, b.dataset.p, b.dataset.v));
+    });
+
+    $('adPanel').classList.remove('hidden');
+  }catch(err){
+    adOut('Failed: ' + err.message);
+    $('adPanel').classList.add('hidden');
+  }
+}
+
+async function adminRowAction(what, who, value){
+  if(what === 'knockout' && !confirm('Knock ' + who + ' out?')) return;
+  adOut('Working…');
+  try{
+    const map = {paid:'setpaid', resendpin:'resendpin', knockout:'knockout', revive:'revive'};
+    const res = await adminApi(map[what], {player:who, paid:value});
+    adOut(typeof res === 'string' ? res : JSON.stringify(res, null, 2));
+    await loadAdmin();
+    await refresh();
+  }catch(err){ adOut('Failed: ' + err.message); }
+}
+
+$('btnAdLoad').addEventListener('click', async ()=>{
+  ADMIN = $('adToken').value.trim();
+  if(!ADMIN){ adOut('Enter the admin token first.'); return; }
+  adOut('Checking…');
+  await loadAdmin();
+  if(!$('adPanel').classList.contains('hidden')) adOut('');
+});
+
+document.querySelectorAll('[data-entries]').forEach(b=>{
+  b.addEventListener('click', async ()=>{
+    const v = b.dataset.entries;
+    if(v === 'running' && !confirm('Close entries? Nobody new can join after this.')) return;
+    adOut('Working…');
+    try{
+      adOut(await adminApi('entries', {value:v}));
+      await loadAdmin();
+    }catch(err){ adOut('Failed: ' + err.message); }
+  });
+});
+
+$('btnAdAdd').addEventListener('click', async ()=>{
+  const name = $('adNewName').value.trim();
+  if(!name){ adOut('Name required.'); return; }
+  adOut('Working…');
+  try{
+    const res = await adminApi('addplayer', {name, email:$('adNewEmail').value.trim()});
+    adOut(res.message);
+    $('adNewName').value = ''; $('adNewEmail').value = '';
+    await loadAdmin();
+    await refresh();
+  }catch(err){ adOut('Failed: ' + err.message); }
+});
+
+document.querySelectorAll('[data-admin]').forEach(b=>{
+  b.addEventListener('click', async ()=>{
+    const action = b.dataset.admin;
+    if(action === 'resolve' && !confirm('Resolve the round now? This knocks people out and emails everyone.')) return;
+    adOut('Working…');
+    try{
+      const res = await adminApi(action, {gw: $('adGW').value.trim() || (STATE ? STATE.gameweek : '')});
+      adOut(typeof res === 'string' ? res : JSON.stringify(res, null, 2));
+      await loadAdmin();
+      await refresh();
+    }catch(err){ adOut('Failed: ' + err.message); }
+  });
+});
+
+// ---------------- boot ----------------
+
+(function init(){
+  const saved = store.get('svfc_lps');
+  if(saved){ try{ ME = JSON.parse(saved); }catch(e){} }
+  refresh();
+  tickHandle = setInterval(renderClock, 1000);
+  // pick up server-side changes if the page is left open
+  setInterval(()=>{ if(!document.hidden) refresh(); }, 120000);
+})();
+
+</script>

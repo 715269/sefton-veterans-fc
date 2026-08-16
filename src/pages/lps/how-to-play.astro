@@ -1,0 +1,249 @@
+---
+// src/pages/lps/how-to-play.astro
+//
+// Player-facing notes for Last Person Standing. Styled to match the rest
+// of the site rather than the game itself — it's a content page.
+//
+// The entry fee is set once, below.
+
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const ENTRY_FEE = '£10';
+const PAY_TO = 'Alan Roberts';
+
+const rules = [
+  {
+    lead: 'Pick one Premier League team to win.',
+    body: 'Every gameweek, you back a single side.',
+  },
+  {
+    lead: "They win, you're through.",
+    body: "A draw knocks you out, same as a defeat. There's no half measure.",
+  },
+  {
+    lead: "You can't pick the same team twice.",
+    body: "Use Liverpool in week one and they're gone for the rest of the run. When all twenty have been used, everyone starts fresh.",
+  },
+  {
+    lead: 'Picks lock at the first kick-off',
+    body: 'of the gameweek — usually the Friday night game.',
+  },
+  {
+    lead: 'Last one standing takes the pot.',
+    body: '',
+  },
+];
+---
+
+<BaseLayout title="How to Play — Last Person Standing">
+  <section class="hero-band">
+    <div class="container">
+      <h1>How to Play</h1>
+      <p>Last Person Standing. One team a week. One life.</p>
+    </div>
+  </section>
+
+  <section class="section-padded container">
+    <h2>The game</h2>
+    <ol class="rules">
+      {rules.map((rule, i) => (
+        <li>
+          <span class="num">{String(i + 1).padStart(2, '0')}</span>
+          <div><strong>{rule.lead}</strong> {rule.body}</div>
+        </li>
+      ))}
+    </ol>
+
+    <div class="note note-warn">
+      <h3>No pick means you're out</h3>
+      <p>
+        Forgetting counts the same as backing a loser. You'll get a reminder
+        email the day before, but don't rely on it — put your pick in as soon
+        as you know.
+      </p>
+    </div>
+  </section>
+
+  <section class="section-light section-padded">
+    <div class="container">
+      <h2>Entering</h2>
+      <p>
+        Go to the game, tap <strong>Enter the game</strong>, and put in your name
+        and email address. You'll get a 4-digit PIN emailed to you — that's what
+        you sign in with from then on, along with your email address.
+      </p>
+      <p>
+        Lost the PIN? Tap <strong>Forgotten your PIN?</strong> on the sign-in
+        screen and it'll be sent again.
+      </p>
+
+      <div class="note">
+        <h3>Entry fee</h3>
+        <p>
+          <span class="fee">{ENTRY_FEE}</span> — <strong>pay {PAY_TO}</strong>.
+        </p>
+        <p>
+          You're not in until you've paid. Cash or a transfer, same as anything
+          else.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-padded container">
+    <h2>Each week</h2>
+    <ul class="plain">
+      <li>Sign in, look at the fixtures, tap the team you fancy. That's it.</li>
+      <li>Teams you've already used are crossed out, so you can't pick them by mistake.</li>
+      <li>You can change your mind as often as you like until the deadline.</li>
+      <li>The clock at the top counts down to the lock. It turns amber in the last two hours.</li>
+      <li>Nobody can see anyone else's pick until the deadline passes. After that, the board shows the lot.</li>
+    </ul>
+
+    <h2>The odd situations</h2>
+    <ul class="plain">
+      <li>
+        <strong>Your match gets postponed.</strong> You survive the round and get
+        that team back to use another week. Not your fault.
+      </li>
+      <li>
+        <strong>Everyone still in goes out in the same week.</strong> Nobody goes
+        out. The round is void, everyone gets their pick back, and we carry on.
+      </li>
+      <li>
+        <strong>Something's gone wrong with your entry.</strong> Have a word with Ged.
+      </li>
+    </ul>
+
+    <h2>A word of advice</h2>
+    <p class="advice">
+      The temptation is to take the biggest favourite every week. The trouble is
+      everyone else does too, and you burn the good teams early. Plenty of people
+      go out in November with nothing left but Burnley away at Anfield.
+    </p>
+
+    <div class="cta-band">
+      <div>
+        <h2>Ready?</h2>
+        <p>Picks lock at the first kick-off of the gameweek.</p>
+      </div>
+      <a href="/lps" class="btn btn-primary">Go to the game</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .hero-band {
+    background: var(--color-navy);
+    color: white;
+    padding: 2.5rem 0;
+  }
+
+  .hero-band h1 {
+    color: white;
+    margin-bottom: 0.5rem;
+  }
+
+  .hero-band p {
+    color: #cbd5e1;
+    margin: 0;
+  }
+
+  .rules {
+    list-style: none;
+    padding: 0;
+    margin: 1.25rem 0 0;
+  }
+
+  .rules li {
+    display: grid;
+    grid-template-columns: 2.2rem 1fr;
+    gap: 0.5rem;
+    padding: 0.9rem 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .rules li:last-child {
+    border-bottom: 0;
+  }
+
+  .rules .num {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #b45309;
+    padding-top: 0.2rem;
+  }
+
+  .note {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 3px solid #f59e0b;
+    border-radius: 0 10px 10px 0;
+    padding: 1.1rem 1.3rem;
+    margin: 1.5rem 0;
+  }
+
+  .note-warn {
+    border-left-color: #b3323b;
+  }
+
+  .note h3 {
+    margin: 0 0 0.4rem;
+    font-size: 1rem;
+    color: var(--color-navy);
+  }
+
+  .note p {
+    margin: 0 0 0.5rem;
+    color: #64748b;
+  }
+
+  .note p:last-child {
+    margin-bottom: 0;
+  }
+
+  .fee {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #b45309;
+  }
+
+  ul.plain {
+    padding-left: 1.1rem;
+    margin: 0.75rem 0 1.5rem;
+    color: #475569;
+  }
+
+  ul.plain li {
+    margin-bottom: 0.55rem;
+  }
+
+  .advice {
+    color: #64748b;
+    max-width: 62ch;
+  }
+
+  .cta-band {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1.75rem 2rem;
+    margin-top: 2rem;
+  }
+
+  .cta-band h2 {
+    margin: 0 0 0.3rem;
+    font-size: 1.3rem;
+  }
+
+  .cta-band p {
+    margin: 0;
+    color: #64748b;
+  }
+</style>

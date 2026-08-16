@@ -19,6 +19,12 @@ import squad2023 from '../assets/squad-2023.jpg';
 // one entirely — nothing else on the page needs to change.
 const games = [
   {
+    name: 'Last Person Standing',
+    blurb: 'One Premier League team a week. One life. Last one standing takes the pot.',
+    href: '/lps',
+    live: true,
+  },
+  {
     name: 'World Cup Predictions',
     blurb: 'Pick your scores, top the table, bragging rights all tournament.',
   },
@@ -54,17 +60,22 @@ const games = [
     <div class="container">
       <h2>Club Games</h2>
       <p class="games-intro">
-        World Cup Predictions, Bonus Ball, Golden Goal — the club's run all
-        three over the years. They're paused for now, but the trophy cabinet
-        isn't going anywhere.
+        Last Person Standing is running now. Bonus Ball, Golden Goal and the
+        World Cup Predictions have all had their turn over the years, and
+        they'll be back.
       </p>
 
       <div class="game-grid">
         {games.map((game) => (
-          <article class="game-card">
-            <span class="game-badge">Returning soon</span>
-            <h3>{game.name}</h3>
+          <article class:list={['game-card', game.live && 'game-card-live']}>
+            <span class:list={['game-badge', game.live && 'game-badge-live']}>
+              {game.live ? 'Playing now' : 'Returning soon'}
+            </span>
+            <h3>
+              {game.href ? <a href={game.href}>{game.name}</a> : game.name}
+            </h3>
             <p>{game.blurb}</p>
+            {game.href && <a href={`${game.href}/how-to-play`} class="game-link">How to play →</a>}
           </article>
         ))}
       </div>
@@ -156,6 +167,36 @@ const games = [
     margin: 0;
     color: #64748b;
     font-size: 0.92rem;
+  }
+
+  .game-card-live {
+    border-color: #f59e0b;
+    box-shadow: 0 1px 3px rgba(180, 83, 9, 0.12);
+  }
+
+  .game-badge-live {
+    color: white;
+    background: #b45309;
+    border-style: solid;
+    border-color: #b45309;
+  }
+
+  .game-card h3 a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .game-card h3 a:hover {
+    text-decoration: underline;
+  }
+
+  .game-link {
+    display: inline-block;
+    margin-top: 0.7rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #b45309;
+    text-decoration: none;
   }
 
   .cta-band {
