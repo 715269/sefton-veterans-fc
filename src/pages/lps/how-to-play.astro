@@ -40,6 +40,7 @@ const rules = [
     <div class="container">
       <h1>How to Play</h1>
       <p>Last Person Standing. One team a week. One life.</p>
+      <a href="/lps" class="hero-skip">Know the rules? Go straight to the game →</a>
     </div>
   </section>
 
@@ -93,6 +94,27 @@ const rules = [
           else.
         </p>
       </div>
+
+      <h2>Rollovers and buying in</h2>
+      <p>
+        If everyone still standing goes out in the same week, nobody is
+        eliminated — the round is void and it becomes a <strong>rollover</strong>.
+        Everyone still in puts another {ENTRY_FEE} in to carry on, and the pot
+        grows.
+      </p>
+      <p>
+        A rollover is also the moment to <strong>buy in</strong>. Anyone who's
+        been knocked out can come back, and anyone who missed the start can join.
+      </p>
+      <p>
+        The rule is simply that everyone in the pot has the same money in it. If
+        you've been playing all along, you've already paid for the earlier rounds,
+        so you just add your {ENTRY_FEE} like everyone else. If you're coming in
+        at the third round, you pay {ENTRY_FEE} three times over to catch up with
+        the players who've been paying since the start. Nobody buys into a big
+        pot on the cheap, and nobody who's stuck with it pays twice for the same
+        round.
+      </p>
     </div>
   </section>
 
@@ -153,6 +175,22 @@ const rules = [
   .hero-band p {
     color: #cbd5e1;
     margin: 0;
+  }
+
+  .hero-skip {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.5rem 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 6px;
+    color: white;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .hero-skip:hover {
+    background: rgba(255, 255, 255, 0.12);
   }
 
   .rules {
