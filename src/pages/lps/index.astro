@@ -1,12 +1,10 @@
 ---
 // src/pages/lps/index.astro
 //
-// Last Person Standing. The game itself is self-contained — all of its
-// styling is scoped under .lps so it can keep its own dark treatment
-// without leaking into the rest of the site.
+// Last Person Standing. The game is self-contained — its styling is scoped
+// under .lps so the dark treatment can't leak into the rest of the site.
 //
-// The Apps Script URL below must match the CURRENT deployment. If the
-// backend is redeployed, paste the new /exec URL in and push.
+// The Apps Script URL below must match the CURRENT deployment.
 
 import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
@@ -32,7 +30,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       </div>
     
       <nav role="tablist">
-        <button role="tab" aria-selected="true" data-tab="pick">Your pick</button>
+        <button role="tab" aria-selected="true" data-tab="pick" id="tabPick">Sign in</button>
         <button role="tab" aria-selected="false" data-tab="board">The board</button>
         <button role="tab" aria-selected="false" data-tab="rules">Rules</button>
       </nav>
@@ -45,25 +43,37 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         <div class="card" id="signinCard">
           <h2>Sign in</h2>
           <label for="inName">Email address</label>
-          <input id="inName" type="email" autocomplete="email" placeholder="The one you entered with">
+          <input id="inName" type="email" autocomplete="email" placeholder="The one you registered with">
           <label for="inPin">PIN</label>
           <input id="inPin" inputmode="numeric" maxlength="4" placeholder="4 digits">
           <button class="btn" id="btnSignin">Sign in</button>
           <p class="muted" style="margin:14px 0 6px">
             <a href="#" id="btnForgot" style="color:var(--flood)">Forgotten your PIN?</a>
           </p>
-          <p class="muted" style="margin:14px 0 6px">Not entered yet?</p>
-          <button class="btn ghost" id="btnShowJoin">Enter the game</button>
+          <p class="muted" style="margin:18px 0 6px">Not entered yet?</p>
+          <button class="btn ghost" id="btnShowJoin">Register</button>
+        </div>
+    
+        <div class="card hidden" id="chooseCard">
+          <h2>Which entry?</h2>
+          <p class="muted" style="margin:0 0 12px">That email address has more than one entry on it.</p>
+          <div id="chooseList"></div>
+          <button class="btn ghost" id="btnCancelChoose" style="margin-top:10px">Back</button>
         </div>
     
         <div class="card hidden" id="joinCard">
-          <h2>Enter the game</h2>
+          <h2>Register</h2>
           <label for="jnName">Your name</label>
           <input id="jnName" autocomplete="name" placeholder="First and last name">
           <label for="jnEmail">Email address</label>
           <input id="jnEmail" type="email" autocomplete="email" placeholder="You'll sign in with this">
-          <button class="btn" id="btnJoin">Enter</button>
+          <label for="jnPin">Choose a PIN</label>
+          <input id="jnPin" inputmode="numeric" maxlength="4" placeholder="4 digits">
+          <label for="jnPin2">Confirm PIN</label>
+          <input id="jnPin2" inputmode="numeric" maxlength="4" placeholder="Same again">
+          <button class="btn" id="btnJoin">Register</button>
           <button class="btn ghost" id="btnCancelJoin" style="margin-top:10px">Back</button>
+          <p class="muted" style="margin:14px 0 0">Entering more than one? Use the same email and give each entry a different name.</p>
         </div>
     
         <div id="pickArea" class="hidden">
@@ -98,9 +108,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <li>Every gameweek, pick <b>one Premier League team to win</b>.</li>
             <li>They win, you go through. <b>A draw puts you out</b>, same as a defeat.</li>
             <li>Once you've used a team, <b>you can't use them again</b> until everyone's burnt through all twenty.</li>
-            <li>Picks lock at the <b>first kick-off</b> of the gameweek. No pick means you're out, so don't leave it to Saturday morning.</li>
-            <li>If your team's match is <b>postponed</b>, you survive the round and get that team back.</li>
-            <li>If everyone left goes out in the <b>same</b> gameweek, nobody goes out — the round is void and you all carry on.</li>
+            <li>Picks lock at the <b>first kick-off</b> of the gameweek. Miss the deadline and you're <b>given the next available team alphabetically</b> — you stay in, but you don't get to choose.</li>
+            <li>If any match in the round is <b>postponed</b>, the whole round is void. Nobody goes out and everyone's team is handed back.</li>
+            <li>If everyone left goes out in the <b>same</b> gameweek, it's a <b>rollover</b> — nobody goes out, teams are handed back, and you all carry on.</li>
             <li>Everyone's picks stay hidden until the deadline passes. Then the board shows the lot.</li>
             <li><b>One life.</b> Last one standing takes the pot.</li>
           </ul>
@@ -486,9 +496,11 @@ async function api(action, payload){
   return json.data;
 }
 
-function say(text, kind){
+function say(text, kind, scroll){
   $('msg').innerHTML = text ? '<div class="msg '+(kind||'')+'">'+text+'</div>' : '';
-  if(text) window.scrollTo({top:0, behavior:'smooth'});
+  // Only jump to the top when the message is the whole point. After a pick
+  // the button turns amber under your thumb, so stay put.
+  if(text && scroll !== false) window.scrollTo({top:0, behavior:'smooth'});
 }
 
 // ---------------- clock ----------------
@@ -637,7 +649,9 @@ async function refresh(){
     if(STATE.me){
       $('signinCard').classList.add('hidden');
       $('joinCard').classList.add('hidden');
+      $('chooseCard').classList.add('hidden');
       $('pickArea').classList.remove('hidden');
+      $('tabPick').textContent = 'Your pick';
       renderStatus(); renderFixtures(); renderBurnt();
     }
   }catch(err){
@@ -651,10 +665,10 @@ async function refresh(){
 }
 
 async function submitPick(tla, team){
-  if(!confirm('Pick ' + team + ' for gameweek ' + STATE.gameweek + '?\n\nThat uses them up for the rest of the season.')) return;
+  if(!confirm('Pick ' + team + ' for gameweek ' + STATE.gameweek + '?\n\nThat uses them up for the remainder of this game.')) return;
   try{
     await api('pick', {player:ME.name, pin:ME.pin, team:tla});
-    say('You\'re on ' + team + ' for gameweek ' + STATE.gameweek + '.', 'good');
+    say('You\'re on ' + team + ' for gameweek ' + STATE.gameweek + '.', 'good', false);
     await refresh();
   }catch(err){ say(err.message, 'bad'); }
 }
@@ -663,7 +677,10 @@ function signOut(){
   ME = null; STATE = null;
   store.del('svfc_lps');
   $('pickArea').classList.add('hidden');
+  $('chooseCard').classList.add('hidden');
+  $('joinCard').classList.add('hidden');
   $('signinCard').classList.remove('hidden');
+  $('tabPick').textContent = 'Sign in';
 }
 
 async function loadBoard(){
@@ -706,24 +723,58 @@ $('btnCancelJoin').addEventListener('click', ()=>{
 });
 
 $('btnSignin').addEventListener('click', async ()=>{
-  const name = $('inName').value.trim(), pin = $('inPin').value.trim();
-  if(!name || !pin){ say('Email address and PIN both needed.', 'bad'); return; }
+  const id = $('inName').value.trim(), pin = $('inPin').value.trim();
+  if(!id || !pin){ say('Email address and PIN both needed.', 'bad'); return; }
+  try{
+    const res = await api('signin', {id, pin});
+    if(res.entries.length === 1){
+      await useEntry(res.entries[0].name, pin);
+    } else {
+      // Shared email — let them say which entry is theirs
+      $('signinCard').classList.add('hidden');
+      $('chooseCard').classList.remove('hidden');
+      $('chooseList').innerHTML = res.entries.map(e=>
+        '<button class="btn ghost" data-entry="'+e.name+'" style="margin-bottom:8px">'
+        + e.name + (e.status === 'out' ? ' (out)' : '') + '</button>'
+      ).join('');
+      $('chooseList').querySelectorAll('button[data-entry]').forEach(b=>{
+        b.addEventListener('click', ()=> useEntry(b.dataset.entry, pin));
+      });
+      say('');
+    }
+  }catch(err){ say(err.message, 'bad'); }
+});
+
+// Entry names are unique, so once one is chosen everything works off it
+async function useEntry(name, pin){
   ME = {name, pin};
   store.set('svfc_lps', JSON.stringify(ME));
+  $('chooseCard').classList.add('hidden');
   say('');
   await refresh();
+}
+
+$('btnCancelChoose').addEventListener('click', ()=>{
+  $('chooseCard').classList.add('hidden');
+  $('signinCard').classList.remove('hidden');
 });
 
 $('btnJoin').addEventListener('click', async ()=>{
   const name = $('jnName').value.trim();
   const email = $('jnEmail').value.trim();
+  const pin = $('jnPin').value.trim();
+  const pin2 = $('jnPin2').value.trim();
+
   if(!name){ say('We need a name.', 'bad'); return; }
   if(!email || email.indexOf('@') < 1){ say('We need a valid email address — it\'s how you sign in.', 'bad'); return; }
+  if(!/^[0-9]{4}$/.test(pin)){ say('Your PIN must be four digits.', 'bad'); return; }
+  if(pin !== pin2){ say('The two PINs don\'t match.', 'bad'); return; }
+
   try{
-    const res = await api('join', {name, email});
-    ME = {name:res.email, pin:res.pin};
+    const res = await api('join', {name, email, pin});
+    ME = {name:res.name, pin:res.pin};
     store.set('svfc_lps', JSON.stringify(ME));
-    say('You\'re in, '+res.name+'. Your PIN is <b>'+res.pin+'</b> — it\'s also on its way to your inbox.', 'good');
+    say('You\'re in, '+res.name+'. Sign in with your email and PIN from now on.', 'good');
     await refresh();
   }catch(err){ say(err.message, 'bad'); }
 });
@@ -742,7 +793,7 @@ $('btnSwitch').addEventListener('click', ()=>{
   signOut();
   $('inName').value = '';
   $('inPin').value = '';
-  say('Signed out. Sign in with another email and PIN, or enter the game.');
+  say('Signed out. Sign in with another email and PIN, or register.');
 });
 
 $('btnAdmin').addEventListener('click', ()=>{
