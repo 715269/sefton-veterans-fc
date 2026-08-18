@@ -1,8 +1,8 @@
 ---
 // src/pages/lps/index.astro
 //
-// Last Person Standing. Styling scoped under .lps so the dark treatment
-// can't leak into the rest of the site.
+// Last Person Standing. Styling is scoped under .lps so the dark treatment
+// can't leak into the site — and so the site's own base styles can't leak in.
 //
 // The Apps Script URL below must match the CURRENT deployment.
 
@@ -11,12 +11,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
 <BaseLayout title="Last Person Standing">
   <div class="lps">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Karla:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap"
+    />
     <div class="wrap">
-    <div class="brand">
-        <img src="/images/logo.png" alt="Sefton Veterans FC crest">
-        <p class="eyebrow">Sefton Veterans FC</p>
-      </div>
-      <h1>Last Person<br>Standing</h1>
+    <h1>Last Person<br>Standing</h1>
     
       <div class="clock" id="clock">
         <div class="clock-label" id="clockLabel">Loading</div>
@@ -435,7 +437,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     font-size:12px;
     padding:6px 10px;
     cursor:pointer;
-  }.lps .mini:hover{border-color:var(--flood);color:var(--chalk)}.lps .mini.on{background:var(--live);border-color:var(--live);color:var(--ink);font-weight:700}.lps .tag{
+  }.lps .mini:hover{border-color:var(--flood);color:var(--chalk)}.lps .mini.on{background:var(--live);border-color:var(--live);color:var(--ink);font-weight:700}.lps .mini.danger{border-color:rgba(224,66,76,.5);color:var(--out)}.lps .mini.danger:hover{background:var(--out);border-color:var(--out);color:#fff}.lps .tag{
     font-family:var(--display);
     text-transform:uppercase;
     letter-spacing:.08em;
@@ -456,6 +458,21 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   @media (prefers-reduced-motion:reduce){.lps *{animation:none!important;transition:none!important}
   }
+
+
+  /* ---------- overriding the site's base styles ---------- */
+
+  .lps h1{color:var(--chalk);font-family:var(--display)}
+  .lps h2,.lps h3{font-family:var(--display)}
+  .lps p,.lps li,.lps span,.lps div{color:inherit}
+  .lps .muted,.lps .clock-label,.lps .clock-sub,.lps .survivors-count{color:var(--mute)}
+  .lps .eyebrow{color:var(--flood)}
+  .lps a{color:var(--flood)}
+  .lps button{font-family:var(--display)}
+  .lps input,.lps textarea{font-family:var(--body)}
+  .lps ul,.lps ol{color:inherit}
+  .lps{padding:0;margin:0}
+  .lps .wrap{padding-top:28px}
 
 </style>
 
@@ -831,7 +848,7 @@ async function loadAdmin(){
       + (nopick.length ? ' · ' + nopick.length + ' yet to pick GW' + d.gameweek : ' · all picked');
 
     $('adPlayers').innerHTML = d.players.map(p=>{
-      const key = p.email || p.name;
+      const key = p.name;
       const pickTxt = p.picked
         ? (p.pick ? 'GW' + d.gameweek + ': ' + p.pick : 'Picked')
         : (p.status === 'alive' ? 'No pick yet' : '');
@@ -851,6 +868,7 @@ async function loadAdmin(){
         +   (p.status==='alive'
               ? '<button class="mini" data-p="'+key+'" data-do="knockout">Knock out</button>'
               : '<button class="mini" data-p="'+key+'" data-do="revive">Put back in</button>')
+        +   '<button class="mini danger" data-p="'+key+'" data-do="delete">Delete</button>'
         + '</div>'
         + '</div>';
     }).join('');
@@ -868,9 +886,14 @@ async function loadAdmin(){
 
 async function adminRowAction(what, who, value){
   if(what === 'knockout' && !confirm('Knock ' + who + ' out?')) return;
+  if(what === 'delete' && !confirm(
+      'Delete ' + who + ' completely?\n\n'
+    + 'This removes the entry and every pick they have made. It cannot be undone '
+    + 'from here.\n\nTo knock someone out but keep their record, cancel and use '
+    + 'Knock out instead.')) return;
   adOut('Working…');
   try{
-    const map = {paid:'setpaid', resendpin:'resendpin', knockout:'knockout', revive:'revive'};
+    const map = {paid:'setpaid', resendpin:'resendpin', knockout:'knockout', revive:'revive', delete:'delete'};
     const res = await adminApi(map[what], {player:who, paid:value});
     adOut(typeof res === 'string' ? res : JSON.stringify(res, null, 2));
     await loadAdmin();
