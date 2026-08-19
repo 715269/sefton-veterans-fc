@@ -2,7 +2,7 @@
 // src/pages/lps/index.astro
 //
 // Last Person Standing. Styling is scoped under .lps so the dark treatment
-// can't leak into the site — and so the site's own base styles can't leak in.
+// can't leak into the site — and so the site's base styles can't leak in.
 //
 // The Apps Script URL below must match the CURRENT deployment.
 
@@ -89,7 +89,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <div id="burntList"></div>
           </div>
     
-          <button class="btn ghost" id="btnSwitch">Sign out / switch player</button>
+          <div id="switchArea" class="hidden card">
+            <h2>Your other entries</h2>
+            <div id="switchList"></div>
+          </div>
+    
+          <button class="btn ghost" id="btnSwitch">Sign out</button>
     
         </div>
       </section>
@@ -646,6 +651,25 @@ function renderStatus(){
   }
 }
 
+function renderSiblings(){
+  const sibs = (STATE.me && STATE.me.siblings) || [];
+  const area = $('switchArea');
+  if(!sibs.length){ area.classList.add('hidden'); return; }
+
+  area.classList.remove('hidden');
+  $('switchList').innerHTML = sibs.map(x=>
+    '<button class="btn ghost" data-sib="'+x.name+'" style="margin-bottom:8px">'
+    + 'Switch to ' + x.name + (x.status === 'out' ? ' (out)' : '') + '</button>'
+  ).join('');
+
+  $('switchList').querySelectorAll('button[data-sib]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      await useEntry(b.dataset.sib, ME.pin);
+      say('Now signed in as ' + b.dataset.sib + '.', 'good');
+    });
+  });
+}
+
 function renderBurnt(){
   const used = (STATE.me && STATE.me.usedTeams) || [];
   const pct = Math.round(used.length/20*100);
@@ -669,7 +693,7 @@ async function refresh(){
       $('chooseCard').classList.add('hidden');
       $('pickArea').classList.remove('hidden');
       $('tabPick').textContent = 'Your pick';
-      renderStatus(); renderFixtures(); renderBurnt();
+      renderStatus(); renderFixtures(); renderBurnt(); renderSiblings();
     }
   }catch(err){
     if(String(err.message).match(/PIN|not found/i)){
@@ -694,6 +718,7 @@ function signOut(){
   ME = null; STATE = null;
   store.del('svfc_lps');
   $('pickArea').classList.add('hidden');
+  $('switchArea').classList.add('hidden');
   $('chooseCard').classList.add('hidden');
   $('joinCard').classList.add('hidden');
   $('signinCard').classList.remove('hidden');
