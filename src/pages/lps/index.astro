@@ -162,6 +162,24 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           </div>
     
           <div class="card">
+            <h2>WhatsApp</h2>
+            <p class="muted" style="margin:0 0 10px">Pick a message, copy it, paste it into the group.</p>
+            <div class="row" style="margin-bottom:10px">
+              <button class="mini" data-wa="nudge">Nudge</button>
+              <button class="mini" data-wa="locked">Picks are in</button>
+              <button class="mini" data-wa="results">Results</button>
+            </div>
+            <textarea id="waText" rows="12" readonly
+              style="width:100%;background:var(--ink);border:1px solid var(--line);border-radius:3px;color:var(--chalk);font-family:var(--body);font-size:14px;padding:12px;margin-bottom:10px"
+              placeholder="Choose a message above."></textarea>
+            <div class="row">
+              <button class="btn ghost" id="btnWaCopy">Copy</button>
+              <a class="btn ghost" id="btnWaShare" href="#" target="_blank" rel="noopener"
+                 style="text-align:center;text-decoration:none;line-height:1.4">Open WhatsApp</a>
+            </div>
+          </div>
+    
+          <div class="card">
             <h2>Add a player</h2>
             <label for="adNewName">Name</label>
             <input id="adNewName" placeholder="First and last name">
@@ -886,6 +904,7 @@ async function adminApi(action, payload){
 }
 
 async function loadAdmin(){
+  WA = null;   // anything below may have changed the picture
   try{
     const d = await adminApi('players');
 
@@ -983,6 +1002,37 @@ document.querySelectorAll('[data-entries]').forEach(b=>{
       await loadAdmin();
     }catch(err){ adOut('Failed: ' + err.message); }
   });
+});
+
+let WA = null;   // the three messages, fetched once per unlock
+
+document.querySelectorAll('[data-wa]').forEach(b=>{
+  b.addEventListener('click', async ()=>{
+    document.querySelectorAll('[data-wa]').forEach(x=> x.classList.toggle('on', x===b));
+    try{
+      if(!WA) WA = await adminApi('whatsapp', {gw: STATE ? STATE.gameweek : ''});
+      const text = WA[b.dataset.wa] || '';
+      $('waText').value = text;
+      $('btnWaShare').href = 'https://wa.me/?text=' + encodeURIComponent(text);
+    }catch(err){ $('waText').value = 'Failed: ' + err.message; }
+  });
+});
+
+$('btnWaCopy').addEventListener('click', async ()=>{
+  const text = $('waText').value;
+  if(!text){ return; }
+  try{
+    await navigator.clipboard.writeText(text);
+    $('btnWaCopy').textContent = 'Copied';
+    setTimeout(()=> $('btnWaCopy').textContent = 'Copy', 1500);
+  }catch(err){
+    // clipboard API needs https and a user gesture; fall back to selecting
+    $('waText').removeAttribute('readonly');
+    $('waText').select();
+    $('waText').setAttribute('readonly','readonly');
+    $('btnWaCopy').textContent = 'Press Ctrl+C';
+    setTimeout(()=> $('btnWaCopy').textContent = 'Copy', 2500);
+  }
 });
 
 $('btnAdAdd').addEventListener('click', async ()=>{
