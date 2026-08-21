@@ -382,7 +382,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     color:var(--ink);
     border-color:var(--flood);
     font-weight:700;
-  }.lps .side.chosen .tla{color:rgba(11,19,28,.7)}.lps .side.burnt{
+  }.lps .side.chosen .tla{color:rgba(11,19,28,.7)}.lps /* While the pick is in flight,.lps amber sweeps across the button. Four
+     seconds is longer than Apps Script usually takes,.lps so the fill is
+     still moving when the answer arrives — it reads as progress,.lps not as
+     a stalled bar. */
+  .side.pending{
+    background-image:linear-gradient(90deg, rgba(245,196,81,.55), rgba(245,196,81,.55));
+    background-repeat:no-repeat;
+    background-size:0% 100%;
+    border-color:var(--flood);
+    animation:lps-fill 4s cubic-bezier(.2,.8,.3,1) forwards;
+  }
+  @keyframes lps-fill{ to { background-size:100% 100%; } }.lps .side.burnt{
     opacity:.35;
     cursor:not-allowed;
     text-decoration:line-through;
@@ -462,7 +473,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     letter-spacing:inherit;cursor:pointer;padding:4px;
   }
 
-  @media (prefers-reduced-motion:reduce){.lps *{animation:none!important;transition:none!important}
+  @media (prefers-reduced-motion:reduce){.lps *{animation:none!important;transition:none!important}.lps .side.pending{background-size:100% 100%}
   }
 
 
@@ -708,11 +719,29 @@ async function refresh(){
 
 async function submitPick(tla, team){
   if(!confirm('Pick ' + team + ' for gameweek ' + STATE.gameweek + '?\n\nThat uses them up for the remainder of this game.')) return;
+
+  // Immediate feedback: the tapped button starts filling, everything else
+  // locks so nobody double-taps their way into a second request.
+  const btn = document.querySelector('button[data-tla="'+tla+'"]');
+  const all = Array.from(document.querySelectorAll('#fixtures button[data-tla]'));
+  const wasDisabled = all.map(b => b.disabled);
+  const label = btn ? btn.querySelector('.tla') : null;
+  const wasLabel = label ? label.textContent : '';
+
+  if(btn) btn.classList.add('pending');
+  if(label) label.textContent = tla + ' · SAVING…';
+  all.forEach(b => b.disabled = true);
+
   try{
     await api('pick', {player:ME.name, pin:ME.pin, team:tla});
     say('You\'re on ' + team + ' for gameweek ' + STATE.gameweek + '.', 'good', false);
-    await refresh();
-  }catch(err){ say(err.message, 'bad'); }
+    await refresh();   // repaints the fixtures, clearing the pending state
+  }catch(err){
+    if(btn) btn.classList.remove('pending');
+    if(label) label.textContent = wasLabel;
+    all.forEach((b, i) => b.disabled = wasDisabled[i]);
+    say(err.message, 'bad');
+  }
 }
 
 function signOut(){
