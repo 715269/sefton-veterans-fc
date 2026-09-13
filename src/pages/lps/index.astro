@@ -117,7 +117,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <li>Once you've used a team, <b>you can't use them again</b> until everyone's burnt through all twenty.</li>
             <li>Picks lock <b>an hour before the first kick-off</b> of the gameweek. Miss the deadline and you're <b>given the next available team alphabetically</b> — you stay in, but you don't get to choose.</li>
             <li>If any match in the round is <b>postponed</b>, the whole round is void. Nobody goes out and everyone's team is handed back.</li>
-            <li>If everyone left goes out in the <b>same</b> gameweek, it's a <b>rollover</b> — nobody goes out, teams are handed back, and you all carry on. Everyone still in stakes again, and it's the one chance for anyone knocked out to <b>buy back in</b>.</li>
+            <li>If everyone left goes out in the <b>same</b> gameweek, it's a <b>rollover</b>. The pot carries over and a <b>new round</b> starts: <b>all twenty teams come back</b> for everyone. You stake again to carry on, and anyone knocked out earlier — or anyone new — can <b>buy in</b>. Nobody is in until they've paid.</li>
             <li>Everyone's picks stay hidden until the deadline passes. Then the board shows the lot.</li>
             <li><b>One life.</b> The last one standing takes <b>80% of the pot</b>. The other 20% goes to club funds.</li>
           </ul>
@@ -144,10 +144,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           <div class="card">
             <h2>Entries</h2>
             <p id="adEntries" class="muted" style="margin:0 0 12px"></p>
-            <div class="row">
+            <div class="row" style="margin-bottom:12px">
               <button class="btn ghost" data-entries="open">Open entries</button>
               <button class="btn ghost" data-entries="running">Close entries</button>
             </div>
+            <button class="btn danger" id="btnNewRound">Start new round (after a rollover)</button>
           </div>
     
           <div class="card">
@@ -1036,6 +1037,23 @@ $('btnWaCopy').addEventListener('click', async ()=>{
     $('btnWaCopy').textContent = 'Press Ctrl+C';
     setTimeout(()=> $('btnWaCopy').textContent = 'Copy', 2500);
   }
+});
+
+$('btnNewRound').addEventListener('click', async ()=>{
+  if(!confirm('Start a new round?\n\n'
+    + '• Every team is handed back — all 20 available to everyone\n'
+    + '• Everyone is marked unpaid and out\n'
+    + '• The current pot is carried over\n'
+    + '• Entries reopen\n\n'
+    + 'Players come back in as you mark them paid. Only do this after a rollover.')) return;
+  if(!confirm('Last check — this resets all 83 entries. Carry on?'.replace('83', STATE ? STATE.totalCount : ''))) return;
+
+  adOut('Working…');
+  try{
+    adOut(await adminApi('newround'));
+    await loadAdmin();
+    await refresh();
+  }catch(err){ adOut('Failed: ' + err.message); }
 });
 
 $('btnForce').addEventListener('click', async ()=>{
