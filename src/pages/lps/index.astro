@@ -286,7 +286,20 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     letter-spacing:.12em;
     font-size:13px;
     color:var(--mute);
-  }.lps .survivors-count b{color:var(--chalk);font-weight:600}.lps .pips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.lps .pip{width:9px;height:9px;border-radius:50%;background:var(--live)}.lps .pip.gone{background:var(--out);opacity:.55}.lps /* ---------- tabs ---------- */
+  }.lps .survivors-count b{color:var(--chalk);font-weight:600}.lps .pips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.lps .pip{width:9px;height:9px;border-radius:50%;background:var(--live)}.lps .pip.gone{background:var(--out);opacity:.55}.lps .pips.buying .pip.gone{background:var(--line);opacity:1}.lps .buyin{
+    margin-top:12px;
+    padding:14px;
+    border:1px solid var(--flood);
+    border-radius:3px;
+    background:rgba(245,196,81,.08);
+  }.lps .buyin-amount{
+    font-family:var(--data);
+    font-size:30px;
+    font-weight:600;
+    color:var(--flood);
+    line-height:1;
+    margin-bottom:4px;
+  }.lps /* ---------- tabs ---------- */
 
   nav{
     display:flex;
@@ -605,10 +618,13 @@ function renderClock(){
 function renderSurvivors(){
   if(!STATE) return;
   const alive = STATE.aliveCount, total = STATE.totalCount;
-  $('survivorCount').innerHTML = '<b>' + alive + '</b> of ' + total + ' still standing';
+  const buying = STATE.buyIn && STATE.buyIn.open;
+  $('survivorCount').innerHTML = '<b>' + alive + '</b> of ' + total +
+    (buying ? ' bought in' : ' still standing');
   let pips = '';
   for(let i=0;i<total;i++) pips += '<div class="pip'+(i<alive?'':' gone')+'"></div>';
   $('pips').innerHTML = pips;
+  $('pips').className = 'pips' + (buying ? ' buying' : '');
 }
 
 // ---------------- fixtures ----------------
@@ -666,6 +682,24 @@ function renderStatus(){
   const me = STATE.me;
   const card = $('statusCard');
   if(!me) return;
+
+  const buy = STATE.buyIn || {};
+
+  if(me.status !== 'alive' && buy.open){
+    card.innerHTML = '<h2>'+me.name+'</h2>'
+      + '<p><span class="status out">Not in yet</span></p>'
+      + '<p style="margin:10px 0 0">A new round has started — <b>all twenty teams are back</b>, '
+      + 'whatever you\'d used up.</p>'
+      + '<div class="buyin">'
+      +   '<div class="buyin-amount">£'+buy.returning+'</div>'
+      +   '<div class="muted">to play this round. Pay <b>'+buy.payTo+'</b>.</div>'
+      + '</div>'
+      + '<p class="muted" style="margin:12px 0 0">You\'ll show as in once your payment\'s '
+      + 'been marked off. Nobody is in until they\'ve paid.</p>'
+      + (buy.prizeText ? '<p class="muted" style="margin:8px 0 0">'+buy.potText+' pot — '
+          +buy.prizeText+' to the winner.</p>' : '');
+    return;
+  }
 
   if(me.status !== 'alive'){
     card.innerHTML = '<h2>'+me.name+'</h2><p><span class="status out">Knocked out</span> '
