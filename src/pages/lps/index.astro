@@ -19,29 +19,29 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     />
     <div class="wrap">
     <h1>Last Person<br>Standing</h1>
-
+    
       <div class="clock" id="clock">
         <div class="clock-label" id="clockLabel">Loading</div>
         <div class="clock-time" id="clockTime">--:--:--</div>
         <div class="clock-sub" id="clockSub"></div>
       </div>
-
+    
       <div class="survivors">
         <div class="survivors-count" id="survivorCount">&nbsp;</div>
         <div class="pips" id="pips"></div>
       </div>
-
+    
       <nav role="tablist">
         <button role="tab" aria-selected="true" data-tab="pick" id="tabPick">Sign in</button>
         <button role="tab" aria-selected="false" data-tab="board">The board</button>
         <button role="tab" aria-selected="false" data-tab="rules">Rules</button>
       </nav>
-
+    
       <div id="msg"></div>
-
+    
       <!-- ============ PICK ============ -->
       <section id="tab-pick">
-
+    
         <div class="card" id="signinCard">
           <h2>Sign in</h2>
           <label for="inName">Email address</label>
@@ -55,14 +55,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           <p class="muted" style="margin:18px 0 6px">Not entered yet?</p>
           <button class="btn ghost" id="btnShowJoin">Register</button>
         </div>
-
+    
         <div class="card hidden" id="chooseCard">
           <h2>Which entry?</h2>
           <p class="muted" style="margin:0 0 12px">That email address has more than one entry on it.</p>
           <div id="chooseList"></div>
           <button class="btn ghost" id="btnCancelChoose" style="margin-top:10px">Back</button>
         </div>
-
+    
         <div class="card hidden" id="joinCard">
           <h2>Register</h2>
           <label for="jnName">Your name</label>
@@ -77,28 +77,28 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           <button class="btn ghost" id="btnCancelJoin" style="margin-top:10px">Back</button>
           <p class="muted" style="margin:14px 0 0">Entering more than one? Use the same email and give each entry a different name.</p>
         </div>
-
+    
         <div id="pickArea" class="hidden">
-
+    
           <div class="card" id="statusCard"></div>
-
+    
           <div id="fixtures"></div>
-
+    
           <div class="card" id="burntCard">
             <h2>Teams you've used</h2>
             <div id="burntList"></div>
           </div>
-
+    
           <div id="switchArea" class="hidden card">
             <h2>Your other entries</h2>
             <div id="switchList"></div>
           </div>
-
+    
           <button class="btn ghost" id="btnSwitch">Sign out</button>
-
+    
         </div>
       </section>
-
+    
       <!-- ============ BOARD ============ -->
       <section id="tab-board" class="hidden">
         <div class="card">
@@ -106,7 +106,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           <div id="board"><p class="muted">Loading…</p></div>
         </div>
       </section>
-
+    
       <!-- ============ RULES ============ -->
       <section id="tab-rules" class="hidden">
         <div class="card rules">
@@ -115,7 +115,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <li>Every gameweek, pick <b>one Premier League team to win</b>.</li>
             <li>They win, you go through. <b>A draw puts you out</b>, same as a defeat.</li>
             <li>Once you've used a team, <b>you can't use them again</b> until everyone's burnt through all twenty.</li>
-            <li>Picks lock at the <b>first kick-off</b> of the gameweek. Miss the deadline and you're <b>given the next available team alphabetically</b> — you stay in, but you don't get to choose.</li>
+            <li>Picks lock <b>an hour before the first kick-off</b> of the gameweek. Miss the deadline and you're <b>given the next available team alphabetically</b> — you stay in, but you don't get to choose.</li>
             <li>If any match in the round is <b>postponed</b>, the whole round is void. Nobody goes out and everyone's team is handed back.</li>
             <li>If everyone left goes out in the <b>same</b> gameweek, it's a <b>rollover</b> — nobody goes out, teams are handed back, and you all carry on. Everyone still in stakes again, and it's the one chance for anyone knocked out to <b>buy back in</b>.</li>
             <li>Everyone's picks stay hidden until the deadline passes. Then the board shows the lot.</li>
@@ -123,14 +123,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           </ul>
         </div>
       </section>
-
+    
       <footer>
         <button id="btnAdmin">Sefton Veterans FC</button>
       </footer>
-
+    
       <!-- ============ ADMIN ============ -->
       <section id="tab-admin" class="hidden">
-
+    
         <div class="card">
           <h2>Admin</h2>
           <label for="adToken">Admin token</label>
@@ -138,9 +138,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           <button class="btn" id="btnAdLoad">Unlock</button>
           <pre id="adOut" class="muted" style="white-space:pre-wrap;margin-top:14px"></pre>
         </div>
-
+    
         <div id="adPanel" class="hidden">
-
+    
           <div class="card">
             <h2>Entries</h2>
             <p id="adEntries" class="muted" style="margin:0 0 12px"></p>
@@ -149,7 +149,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
               <button class="btn ghost" data-entries="running">Close entries</button>
             </div>
           </div>
-
+    
           <div class="card">
             <h2>The week</h2>
             <div class="row" style="margin-bottom:10px">
@@ -157,12 +157,13 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
               <button class="btn ghost" data-admin="resolve">Resolve round</button>
             </div>
             <button class="btn ghost" data-admin="why" style="margin-bottom:10px">Why hasn't it resolved?</button>
-            <button class="btn ghost" data-admin="resultsemail">Send results email</button>
+            <button class="btn ghost" data-admin="resultsemail" style="margin-bottom:10px">Send results email</button>
+            <button class="btn danger" id="btnForce">Force resolve now</button>
             <label for="adGW">Current gameweek</label>
             <input id="adGW" inputmode="numeric" placeholder="Leave blank for the live one">
             <button class="btn ghost" data-admin="setgw">Set gameweek</button>
           </div>
-
+    
           <div class="card">
             <h2>WhatsApp</h2>
             <p class="muted" style="margin:0 0 10px">Pick a message, copy it, paste it into the group.</p>
@@ -180,7 +181,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
                  style="text-align:center;text-decoration:none;line-height:1.4">Open WhatsApp</a>
             </div>
           </div>
-
+    
           <div class="card">
             <h2>Add a player</h2>
             <label for="adNewName">Name</label>
@@ -189,14 +190,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <input id="adNewEmail" type="email" placeholder="Leave blank if they haven't got one">
             <button class="btn ghost" id="btnAdAdd">Enter them</button>
           </div>
-
+    
           <div class="card">
             <h2>Players</h2>
             <p id="adCounts" class="muted" style="margin:0 0 6px"></p>
             <pre id="adRowOut" class="muted" style="white-space:pre-wrap;margin:0 0 10px"></pre>
             <div id="adPlayers"></div>
           </div>
-
+    
         </div>
       </section>
     </div>
@@ -941,7 +942,6 @@ async function loadAdmin(){
         +   '<button class="mini '+(p.paid?'on':'')+'" data-p="'+key+'" data-do="paid" data-v="'+(p.paid?'N':'Y')+'">'
         +     (p.paid?'Mark unpaid':'Mark paid')+'</button>'
         +   '<button class="mini" data-p="'+key+'" data-do="resendpin">Send PIN</button>'
-        +   (p.paid ? '' : '<button class="mini" data-p="'+key+'" data-do="remindpay">Send reminder</button>')
         +   (p.status==='alive'
               ? '<button class="mini" data-p="'+key+'" data-do="knockout">Knock out</button>'
               : '<button class="mini" data-p="'+key+'" data-do="revive">Put back in</button>')
@@ -970,7 +970,6 @@ function rowOut(text){
 
 async function adminRowAction(what, who, value){
   if(what === 'knockout' && !confirm('Knock ' + who + ' out?')) return;
-  if(what === 'remindpay' && !confirm('Send ' + who + ' a payment reminder, asking them to pay Alan Roberts directly?')) return;
   if(what === 'delete' && !confirm(
       'Delete ' + who + ' completely?\n\n'
     + 'This removes the entry and every pick they have made. It cannot be undone '
@@ -979,7 +978,7 @@ async function adminRowAction(what, who, value){
 
   rowOut('Working…');
   try{
-    const map = {paid:'setpaid', resendpin:'resendpin', remindpay:'remindpay', knockout:'knockout', revive:'revive', delete:'delete'};
+    const map = {paid:'setpaid', resendpin:'resendpin', knockout:'knockout', revive:'revive', delete:'delete'};
     const res = await adminApi(map[what], {player:who, paid:value});
     const msg = typeof res === 'string' ? res : JSON.stringify(res, null, 2);
     await loadAdmin();      // repaints the list, so write the message after
@@ -1037,6 +1036,19 @@ $('btnWaCopy').addEventListener('click', async ()=>{
     $('btnWaCopy').textContent = 'Press Ctrl+C';
     setTimeout(()=> $('btnWaCopy').textContent = 'Copy', 2500);
   }
+});
+
+$('btnForce').addEventListener('click', async ()=>{
+  if(!confirm('Resolve gameweek ' + (STATE ? STATE.gameweek : '') + ' now, before the rest of the '
+    + 'round has been played?\n\nOnly works if every team anyone picked has already played. '
+    + 'A postponement later in the round will no longer void it.')) return;
+  adOut('Working…');
+  try{
+    const res = await adminApi('resolve', {gw: STATE ? STATE.gameweek : '', force: true});
+    adOut(typeof res === 'string' ? res : JSON.stringify(res, null, 2));
+    await loadAdmin();
+    await refresh();
+  }catch(err){ adOut('Failed: ' + err.message); }
 });
 
 $('btnAdAdd').addEventListener('click', async ()=>{
