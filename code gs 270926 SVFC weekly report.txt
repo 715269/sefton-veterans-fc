@@ -1,0 +1,2048 @@
+// ════════════════════════════════════════════════════════════════════
+// Sefton Veterans FC — Weekly Match Report automation (v3)
+// ════════════════════════════════════════════════════════════════════
+//
+// WHAT CHANGED FROM v2
+//   • Two ways in, one way through. The Google Form (onFormSubmit) and the
+//     website page (doPost) both build the same `report` object and hand it
+//     to processReport(). Neither can break the other.
+//   • Repeat submissions of the same report are ignored, so a retry from a
+//     phone with bad signal cannot double-count appearances.
+//   • Website reports record who started and who was a sub.
+//   • Website reports name goalscorers exactly, so nothing lands in
+//     "Unmatched Scorers" any more. Form reports still use the text parser.
+//   • A "Results" tab is written for the website to read back.
+//
+// SETUP
+//   1. This script stays bound to the FORM (Form → ⋮ → Script editor).
+//   2. Run setSharedSecret() once, after editing the value inside it.
+//   3. Deploy → New deployment → Web app
+//        Execute as:     Me
+//        Who has access: Anyone
+//      Copy the /exec URL into match-report.astro as ENDPOINT.
+//   4. Re-deploy (Deploy → Manage deployments → edit → Deploy) after any
+//      later edit, or the website keeps hitting the old version.
+// ════════════════════════════════════════════════════════════════════
+
+// The spreadsheet this script writes to. Set explicitly so the script works
+// whether it is bound to the form, bound to the sheet, or standalone.
+const SPREADSHEET_ID = '1L23J3t3Chk4P74kqvAIxPUErwY20ZjBeL5_SmAZQreI';
+
+const TEAMS = ['Over 35s', 'Over 45s', 'Over 50s', 'Open Age'];
+
+const SHEET_FIXTURES  = 'Fixtures';
+const SHEET_ROSTER    = 'Roster';
+const SHEET_REPORTS   = 'Match Reports';
+const SHEET_STATS     = 'Player Stats';
+const SHEET_RESULTS   = 'Results';
+const SHEET_UNMATCHED = 'Unmatched Scorers';
+const SHEET_MANAGERS  = 'Managers';
+const SHEET_REGISTRATIONS = 'Registrations';
+
+
+const REPORT_HEADERS = [
+ 'Timestamp', 'Report ID', 'Source', 'Captain', 'Managers', 'Team', 'Opponent',
+  'Home/Away', 'Match Date', 'Competition', 'Score',
+  'Goalkeeper', 'Starting', 'Bench', 'Positions',
+  'Man of the Match',
+  'Subs Paid', 'Paid by Transfer', 'Unpaid',
+  'Booked', 'Sent Off',
+  'Goalscorers', 'Own Goals', 'Goalscorers (as typed)', 'Booking Detail', 'Notes'
+];
+
+const STATS_HEADERS = [
+  'Name', 'Team', 'Appearances', 'Starts', 'Sub Apps',
+  'Goals', 'Booked', 'Sent Off', 'Subs Paid', 'Paid by Transfer'
+];
+
+const RESULTS_HEADERS = [
+  'Date', 'Team', 'Opponent', 'Result', 'Goals For', 'Goals Against',
+  'Scorers', 'Outcome', 'Updated'
+];
+
+const REGISTRATION_HEADERS = [
+  'Timestamp', 'Name', 'Date of Birth', 'Address', 'Postcode',
+  'Email', 'Phone', 'Preferred Team', 'Notes', 'Consent', 'Status'
+];
+
+
+
+// Google Sheets reads "1-2" as the 1st of February unless the column is
+// formatted as plain text first. These columns must never be auto-parsed.
+const TEXT_COLUMNS = ['Score', 'Result', 'Report ID'];
+
+
+// ════════════════════════════════════════════════════════════════════
+// Way in #1 — the website
+// ════════════════════════════════════════════════════════════════════
+
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return jsonOut({ ok: false, error: 'Empty request.' });
+    }
+
+    const payload = JSON.parse(e.postData.contents);
+
+    const expected = PropertiesService.getScriptProperties().getProperty('SHARED_SECRET');
+    if (!expected || String(payload.secret || '') !== expected) {
+      return jsonOut({ ok: false, error: 'Not authorised.' });
+    }
+    if (String(payload.type || '') === 'registration') {
+       return jsonOut(processRegistration(payload));
+     }
+    if (!payload.team || TEAMS.indexOf(payload.team) === -1) {
+      return jsonOut({ ok: false, error: 'Unknown team: ' + payload.team });
+    }
+
+    const report = {
+      reportId:   String(payload.reportId || ''),
+      source:     'Website',
+      origin:     String(payload.origin || ''),
+      captain:    String(payload.captain || ''),
+      managers:   normaliseNameList(payload.managers),
+      interClub:  Boolean(payload.interClub),
+      team:       payload.team,
+      opponent:   String(payload.opponent || '').trim(),
+      homeAway:   String(payload.homeAway || ''),
+      matchDate:  normaliseDate(payload.matchDate),
+      competition: String(payload.competition || ''),
+      scoreFor:     toIntOrNull(payload.scoreFor),
+      scoreAgainst: toIntOrNull(payload.scoreAgainst),
+      players:    normalisePlayers(payload.players),
+      ownGoals:   Math.max(0, parseInt(payload.ownGoals, 10) || 0),
+      motm:       String(payload.motm || '').trim(),
+      costs: (function (c) {
+        c = c || {};
+        return {
+          refFee:      Math.max(0, Number(c.refFee) || 0),
+          kitCleaning: Math.max(0, Number(c.kitCleaning) || 0),
+          pitchShare:  Math.max(0, Number(c.pitchShare) || 0),
+          other:       Math.max(0, Number(c.other) || 0),
+          otherNote:   String(c.otherNote || '').trim()
+        };
+      })(payload.costs),
+      positionUpdates: (payload.positionUpdates && typeof payload.positionUpdates === 'object')
+                         ? payload.positionUpdates : {},
+      newPlayers: (payload.newPlayers || []).map(function (n) { return String(n).trim(); })
+                    .filter(function (n) { return n.length > 0; }),
+      cardDetail: '',
+      notes:      String(payload.notes || ''),
+      scorersText: ''
+    };
+
+    const result = processReport(report);
+    return jsonOut(result);
+
+  } catch (err) {
+    // Never throw back at the phone — the captain can't act on a stack trace.
+    Logger.log('doPost failed: ' + err.message);
+    return jsonOut({ ok: false, error: 'Could not save the report: ' + err.message });
+  }
+}
+
+function jsonOut(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Way out — what the website is allowed to read
+// ════════════════════════════════════════════════════════════════════
+//
+// Deliberately narrow. Results, scorers and card COUNTS go out; who paid
+// their subs, and why anyone was booked, never leave the spreadsheet.
+
+function doGet(e) {
+  const PUBLIC_FEEDS = {
+    results:   publicResults,
+    stats:     publicPlayerStats,
+    squads:    publicSquads,
+    positions: publicPositions,
+    fixtures:  publicFixtures,
+    managers:  publicManagers
+  };
+
+  const feed = String(((e && e.parameter) || {}).feed || 'results').toLowerCase();
+
+  try {
+    if (!Object.prototype.hasOwnProperty.call(PUBLIC_FEEDS, feed)) {
+      return jsonOut({ ok: false, error: 'Unknown feed: ' + feed });
+    }
+
+    const payload = PUBLIC_FEEDS[feed]();
+    const wrapper = { ok: true };
+    wrapper[feed === 'stats' ? 'players' : feed] = payload;
+    return jsonOut(wrapper);
+
+  } catch (err) {
+    Logger.log('doGet failed: ' + err.message);
+    return jsonOut({ ok: false, error: err.message });
+  }
+}
+
+function publicResults() {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_RESULTS);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+
+  const detail = matchDetailByMatch(ss);
+  const data = sheet.getDataRange().getValues();
+  const head = data[0].map(String);
+  const idx = function (name) { return head.indexOf(name); };
+
+  const out = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const date = normaliseDate(row[idx('Date')]);
+    const team = String(row[idx('Team')] || '').trim();
+    const opponent = String(row[idx('Opponent')] || '').trim();
+    if (!date || !team || !opponent) continue;
+
+    const d = detail[matchKey(date, team, opponent)] || null;
+
+    out.push({
+      date: date,
+      team: team,
+      opponent: opponent,
+      result: scoreText(row, idx),
+      scorers: splitNames(row[idx('Scorers')]),
+      outcome: String(row[idx('Outcome')] || 'Unknown'),
+      booked: d ? d.booked.length : 0,
+      sentOff: d ? d.sentOff.length : 0,
+      detail: d
+    });
+  }
+  return out;
+}
+
+// The teamsheet as filed, for the match detail panel on the website.
+//
+// Deliberately excludes two things that live in the same row:
+//   • who paid their subs, and how       — club business, not public
+//   • the reason a card was given        — naming an offence in public is a
+//     different thing from noting a booking happened
+function matchDetailByMatch(ss) {
+  const sheet = ss.getSheetByName(SHEET_REPORTS);
+  const map = {};
+  if (!sheet || sheet.getLastRow() < 2) return map;
+
+  const data = sheet.getDataRange().getValues();
+  const head = data[0].map(String);
+  const at = function (row, name) {
+    const i = head.indexOf(name);
+    return i === -1 ? '' : row[i];
+  };
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const date = normaliseDate(at(row, 'Match Date'));
+    const team = String(at(row, 'Team') || '').trim();
+    const opponent = String(at(row, 'Opponent') || '').trim();
+    if (!date || !team || !opponent) continue;
+
+    const stamp = at(row, 'Timestamp');
+    map[matchKey(date, team, opponent)] = {
+      keeper:      String(at(row, 'Goalkeeper') || '').trim(),
+      positions:   parsePositionCell(at(row, 'Positions')),
+      starting:    splitNames(at(row, 'Starting')),
+      bench:       splitNames(at(row, 'Bench')),
+      motm:        String(at(row, 'Man of the Match') || '').trim(),
+      booked:      splitNames(at(row, 'Booked')),
+      sentOff:     splitNames(at(row, 'Sent Off')),
+      scorers:     parseScorerCell(at(row, 'Goalscorers')),
+      ownGoals:    Number(at(row, 'Own Goals')) || 0,
+      captain:     String(at(row, 'Captain') || '').trim(),
+      managers:    splitNames(at(row, 'Managers')),
+      submittedAt: stamp instanceof Date ? stamp.toISOString() : String(stamp || ''),
+      notes:       String(at(row, 'Notes') || '').trim()
+    };
+  }
+  return map;
+}
+
+// Prefer the numeric columns. Fall back to the text cell, but only if it
+// still looks like a score — an old row Sheets turned into a date is dropped
+// rather than published as "Sun Feb 01 2026".
+function scoreText(row, idx) {
+  const f = idx('Goals For') === -1 ? '' : row[idx('Goals For')];
+  const a = idx('Goals Against') === -1 ? '' : row[idx('Goals Against')];
+  if (f !== '' && a !== '' && f !== null && a !== null) {
+    return Number(f) + '-' + Number(a);
+  }
+  const raw = idx('Result') === -1 ? '' : row[idx('Result')];
+  if (raw instanceof Date) {
+    Logger.log('Result cell was stored as a date — run repairScoreColumns().');
+    return '';
+  }
+  return /^\d+\s*-\s*\d+$/.test(String(raw)) ? String(raw).replace(/\s/g, '') : '';
+}
+
+// Google Sheets reads "1-2" as the 1st of February unless the column is
+// formatted as plain text first.
+function forceTextColumns(sheet, headerNames) {
+  const head = headerRow(sheet);
+  headerNames.forEach(function (name) {
+    const i = head.indexOf(name);
+    if (i === -1) return;
+    sheet.getRange(1, i + 1, sheet.getMaxRows(), 1).setNumberFormat('@');
+  });
+}
+
+function matchKey(date, team, opponent) {
+  return [date, team, opponent].join('|').toLowerCase();
+}
+
+// The fixture list. This tab owns the schedule; the Results tab owns results.
+// Nothing here is ever written by a match report, so the two cannot collide.
+//
+// Expected columns (order does not matter, names do):
+//   Date · Team · Opponent · Venue · Type
+//
+// A row with no opponent, or "TBC", is kept and marked provisional — a date
+// reserved with the opposition not yet known. Only rows with no date or no
+// team are dropped, since there is nothing to show.
+function publicFixtures() {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_FIXTURES);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+
+  const data = sheet.getDataRange().getValues();
+  const head = data[0].map(function (h) { return String(h).trim(); });
+  const at = function (row, names) {
+    for (let i = 0; i < names.length; i++) {
+      const j = head.indexOf(names[i]);
+      if (j !== -1) return row[j];
+    }
+    return '';
+  };
+
+  const out = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const team = String(at(row, ['Team']) || '').trim();
+    const date = normaliseDate(at(row, ['Date']));
+    if (!team || !date) continue;
+
+    let opponent = String(at(row, ['Opponent']) || '').trim();
+    const provisional = !opponent || opponent.toUpperCase() === 'TBC';
+    if (provisional) opponent = 'TBC';
+
+    const venue = String(at(row, ['Venue', 'Home/Away', 'HomeAway']) || '').trim();
+    const ha = venue.toLowerCase().charAt(0) === 'h' ? 'Home'
+             : venue.toLowerCase().charAt(0) === 'a' ? 'Away' : '';
+
+    out.push({
+      team: team,
+      opponent: opponent,
+      date: date,
+      venue: ha || venue || 'TBC',
+      homeAway: ha,
+      type: String(at(row, ['Type', 'Competition']) || '').trim(),
+      provisional: provisional
+    });
+  }
+
+  out.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  return out;
+}
+
+// The Roster tab, grouped by team — names only. This is what the match report
+// page builds its squad lists from, so a player added by a captain on Saturday
+// appears in the list for everyone else after the next build.
+function publicSquads() {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_ROSTER);
+  if (!sheet || sheet.getLastRow() < 2) return {};
+
+  const data = sheet.getDataRange().getValues();
+  const squads = {};
+  for (let i = 1; i < data.length; i++) {
+    const name = String(data[i][0] || '').trim();
+    const team = String(data[i][1] || '').trim();
+    if (!name || !team) continue;
+    if (!squads[team]) squads[team] = [];
+    if (squads[team].indexOf(name) === -1) squads[team].push(name);
+  }
+  Object.keys(squads).forEach(function (team) {
+    squads[team].sort(function (a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; });
+  });
+  return squads;
+}
+// The Managers tab, grouped by team. One row per person, so Open Age simply
+// has two rows — no delimited strings to parse and nothing to break when a
+// name contains a comma, which every name here does.
+function publicManagers() {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_MANAGERS);
+  const out = {};
+  if (!sheet || sheet.getLastRow() < 2) return out;
+
+  const data = sheet.getDataRange().getValues();
+  const head = data[0].map(function (h) { return String(h).trim(); });
+  const teamCol = head.indexOf('Team');
+  const nameCol = head.indexOf('Manager');
+  if (teamCol === -1 || nameCol === -1) return out;
+
+  for (let i = 1; i < data.length; i++) {
+    const team = String(data[i][teamCol] || '').trim();
+    const name = String(data[i][nameCol] || '').trim();
+    if (!team || !name) continue;
+    if (!out[team]) out[team] = [];
+    if (out[team].indexOf(name) === -1) out[team].push(name);
+  }
+  return out;
+}
+
+
+// Each player's remembered position, keyed "team|name" in lower case, so the
+// match report form can fill them in without the captain being asked again.
+function publicPositions() {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_ROSTER);
+  const out = {};
+  if (!sheet || sheet.getLastRow() < 2) return out;
+
+  const head = headerRow(sheet);
+  const posCol = head.indexOf('Position');
+  if (posCol === -1) return out;
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    const name = String(data[i][0] || '').trim();
+    const team = String(data[i][1] || '').trim();
+    const pos = String(data[i][posCol] || '').trim().toUpperCase();
+    if (name && team && ['GK', 'DEF', 'MID', 'FWD'].indexOf(pos) !== -1) {
+      out[(team + '|' + name).toLowerCase()] = pos;
+    }
+  }
+  return out;
+}
+
+// Appearances, goals and discipline. Payment columns are never included.
+function publicPlayerStats() {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_STATS);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+
+  const allowed = ['Name', 'Team', 'Appearances', 'Starts', 'Sub Apps',
+                   'Goals', 'Booked', 'Sent Off'];
+  const data = sheet.getDataRange().getValues();
+  const head = data[0].map(String);
+
+  const out = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row[0]) continue;
+    const obj = {};
+    allowed.forEach(function (name) {
+      const j = head.indexOf(name);
+      if (j === -1) return;
+      const key = name.charAt(0).toLowerCase() + name.slice(1).replace(/ /g, '');
+      obj[key] = (name === 'Name' || name === 'Team') ? String(row[j]) : (Number(row[j]) || 0);
+    });
+    out.push(obj);
+  }
+  return out;
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Way in #2 — the Google Form (unchanged behaviour, new plumbing)
+// ════════════════════════════════════════════════════════════════════
+
+function onFormSubmit(e) {
+  if (!e || !e.response) return;   // only fires in a form-bound project
+  const itemResponses = e.response.getItemResponses();
+
+  let team = null, captain = '', opponent = '', homeAway = '';
+  let matchDate = '', score = '';
+  let otherPlayersText = '', goalscorersText = '';
+  let bookingDetailText = '', notesText = '';
+  let gridResponse = null, gridRows = null;
+
+  for (const itemResponse of itemResponses) {
+    const item = itemResponse.getItem();
+    const title = item.getTitle();
+    const response = itemResponse.getResponse();
+
+    if (title === 'Your Name') captain = response;
+    if (title === 'Team') team = response;
+    if (title === 'Opponent') opponent = response;
+    if (title === 'Home or Away') homeAway = response;
+    if (title === 'Match date') matchDate = response;
+    if (title === 'Final score') score = response;
+    if (title.indexOf('Any other player') !== -1) otherPlayersText = response || '';
+    if (title.indexOf('Goalscorers') !== -1) goalscorersText = response || '';
+    if (title.indexOf('Booking') !== -1) bookingDetailText = response || '';
+    if (title.indexOf('other notes') !== -1) notesText = response || '';
+
+    if (item.getType() === FormApp.ItemType.GRID) {
+      gridResponse = response;
+      gridRows = item.asGridItem().getRows();
+    }
+  }
+
+  if (!team) return;
+
+  const newNames = otherPlayersText
+    .split(';')
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s.length > 0; });
+
+  // Turn the grid into the same player shape the website sends.
+  const players = [];
+  if (gridResponse && gridRows) {
+    for (let i = 0; i < gridRows.length; i++) {
+      const cols = gridResponse[i] || [];
+      if (cols.indexOf('Played') === -1 &&
+          cols.indexOf('Subs Paid') === -1 &&
+          cols.indexOf('Booked') === -1 &&
+          cols.indexOf('Sent Off') === -1) continue;
+
+      players.push({
+        name:     gridRows[i],
+        played:   cols.indexOf('Played') !== -1,
+        role:     '',                      // the form can't tell us this
+        subsPaid: cols.indexOf('Subs Paid') !== -1,
+        booked:   cols.indexOf('Booked')    !== -1,
+        sentOff:  cols.indexOf('Sent Off')  !== -1,
+        goals:    null                     // parsed from the text instead
+      });
+    }
+  }
+  newNames.forEach(function (name) {
+    players.push({ name: name, played: true, role: '', subsPaid: false,
+                   booked: false, sentOff: false, goals: null });
+  });
+
+  const parsedScore = parseScoreText(score);
+
+  processReport({
+    reportId:    'form-' + (e.response.getId ? e.response.getId() : Utilities.getUuid()),
+    source:      'Google Form',
+    captain:     captain,
+    team:        team,
+    opponent:    String(opponent || '').trim(),
+    homeAway:    homeAway,
+    matchDate:   normaliseDate(matchDate),
+    competition: '',
+    scoreFor:     parsedScore.us,
+    scoreAgainst: parsedScore.them,
+    players:     players,
+    ownGoals:    0,
+    positionUpdates: {},
+    newPlayers:  newNames,
+    cardDetail:  bookingDetailText,
+    notes:       notesText,
+    scorersText: goalscorersText
+  });
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// The one path both ways in lead to
+// ════════════════════════════════════════════════════════════════════
+
+function processReport(report) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);           // two captains filing at once must not interleave
+
+  try {
+    const ss = getSpreadsheet();
+
+    // Already had this one? Say yes and change nothing.
+    if (report.reportId && alreadyRecorded(ss, report.reportId)) {
+      return { ok: true, duplicate: true, message: 'Already recorded.' };
+    }
+
+    syncRoster(ss, report.team, report.newPlayers);
+    learnPositions(ss, report.team, report.positionUpdates);
+
+    // Keep the fallback Google Form's grid current, but never let a form
+    // problem stop a website report being saved.
+    try {
+      const form = getFormOrNull();
+      if (form) updateGridForTeam(form, report.team);
+    } catch (err) {
+      Logger.log('Grid refresh skipped: ' + err.message);
+    }
+
+    const played   = report.players.filter(function (p) { return p.played; });
+    const starting = played.filter(function (p) { return p.role === 'Start'; });
+    const keeper   = played.filter(function (p) { return p.position === 'GK'; })[0] || null;
+
+    // Back to front, as a teamsheet reads. Anyone unassigned goes last.
+    const rank = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
+    starting.sort(function (a, b) {
+      const ra = rank[a.position] === undefined ? 9 : rank[a.position];
+      const rb = rank[b.position] === undefined ? 9 : rank[b.position];
+      return ra - rb;
+    });
+    const bench    = played.filter(function (p) { return p.role === 'Sub'; });
+    const paid     = report.players.filter(function (p) { return p.subsPaid; });
+    const cash     = report.players.filter(function (p) { return p.payment === 'Paid'; });
+    const transfer = report.players.filter(function (p) { return p.payment === 'Transfer'; });
+    const unpaid   = played.filter(function (p) { return !p.subsPaid; });
+    const booked   = report.players.filter(function (p) { return p.booked; });
+    const sentOff  = report.players.filter(function (p) { return p.sentOff; });
+
+    const scoreText = (report.scoreFor === null || report.scoreAgainst === null)
+      ? ''
+      : report.scoreFor + '-' + report.scoreAgainst;
+
+    // Goals: the website tells us exactly, the form makes us guess.
+    let scorers;
+    if (report.source === 'Website') {
+      scorers = played
+        .filter(function (p) { return (p.goals || 0) > 0; })
+        .map(function (p) { return { name: p.name, goals: p.goals }; });
+    } else {
+      scorers = matchScorersFromText(ss, report.team, report.scorersText);
+    }
+
+    // FIXED: three arguments (ss, headers, values) — the sheet name is no
+    // longer passed here, since upsertReportRow looks up SHEET_REPORTS
+    // itself and never needed a fourth argument. Passing SHEET_REPORTS as a
+    // second argument had been silently shifting REPORT_HEADERS into the
+    // values slot and dropping the real values object entirely.
+    upsertReportRow(ss, REPORT_HEADERS, {
+      'Timestamp':               new Date(),
+      'Report ID':               report.reportId,
+      'Source':                  report.source,
+      'Captain':                 report.captain,
+      'Inter-Club':               report.interClub ? 'Yes' : '',
+      'Managers':                (report.managers || []).join('; '),
+      'Team':                    report.team,
+      'Opponent':                report.opponent,
+      'Home/Away':               report.homeAway,
+      'Match Date':              report.matchDate,
+      'Competition':             report.competition,
+      'Score':                   scoreText,
+      'Goalkeeper':              keeper ? keeper.name : '',
+      'Starting':                names(starting).join('; '),
+      'Positions':               played
+                                   .filter(function (p) { return p.position; })
+                                   .map(function (p) { return p.name + ' (' + p.position + ')'; })
+                                   .join('; '),
+      'Bench':                   names(bench).join('; '),
+      'Man of the Match':        report.motm || '',
+      'Subs Paid':               names(cash).join('; '),
+      'Paid by Transfer':        names(transfer).join('; '),
+      'Unpaid':                  names(unpaid).join('; '),
+      'Booked':                  names(booked).join('; '),
+      'Sent Off':                names(sentOff).join('; '),
+      'Goalscorers':             goalscorerCell(scorers, report.ownGoals),
+      'Own Goals':               report.ownGoals || '',
+      'Goalscorers (as typed)':  report.scorersText,
+      'Booking Detail':          cardDetailCell(report),
+      'Notes':                   report.notes
+    });
+
+    // Must run before rebuildPlayerStatsCore() — subsAmountFor() needs to
+    // see last week's appearance count, not this week's.
+    writeSubsLedger(ss, report, played);
+    ensureMatchCostsRow(ss, report);
+
+    // Recounts Player Stats from scratch against whatever's currently in
+    // Match Reports, rather than adding on top of the running total. Since
+    // Match Reports now holds exactly one row per match (see
+    // upsertReportRow), this makes a resubmission self-correcting — Player
+    // Stats can never drift out of sync with the log again.
+    //
+    // Calls the lock-free core directly, NOT rebuildPlayerStats() — this
+    // function is already holding the script lock for the whole submission,
+    // and rebuildPlayerStats() tries to acquire that same lock itself. A
+    // function waiting on a lock it already holds waits the full 30 seconds
+    // and then throws, which is why reports were silently failing after
+    // this line was first added.
+    rebuildPlayerStatsCore(ss);
+
+    writeResult(ss, report, scorers);
+
+    triggerSiteBuild(report);
+    notifyMatchReport(report, played.length, scorers);
+
+    return {
+      ok: true,
+      message: 'Report saved.',
+      played: played.length,
+      goals: scorers.reduce(function (n, s) { return n + s.goals; }, 0)
+    };
+
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Results — what the website reads back
+// ════════════════════════════════════════════════════════════════════
+
+function writeResult(ss, report, scorers) {
+  if (report.scoreFor === null || report.scoreAgainst === null) return;
+  if (!report.matchDate || !report.opponent) return;
+
+  const sheet = getOrCreate(ss, SHEET_RESULTS, RESULTS_HEADERS);
+
+  const outcome = report.scoreFor > report.scoreAgainst ? 'Win'
+                : report.scoreFor < report.scoreAgainst ? 'Loss'
+                : 'Draw';
+
+  const labels = scorerLabels(ss, report.team, scorers, report.ownGoals);
+
+  ensureHeaders(sheet, RESULTS_HEADERS);
+  forceTextColumns(sheet, TEXT_COLUMNS);
+
+  const values = {
+    'Date':          report.matchDate,
+    'Team':          report.team,
+    'Opponent':      report.opponent,
+    'Result':        report.scoreFor + '-' + report.scoreAgainst,
+    'Goals For':     report.scoreFor,      // kept as numbers so the score can
+    'Goals Against': report.scoreAgainst,  // always be rebuilt
+    'Scorers':       labels.join('; '),    // semicolons: the website splits on these
+    'Outcome':       outcome,
+    'Updated':       new Date()
+  };
+
+  // Build the row in whatever order this sheet's headers happen to be in,
+  // so adding a column can never shunt the data out of line.
+  const head = headerRow(sheet);
+  const row = head.map(function (h) {
+    return Object.prototype.hasOwnProperty.call(values, h) ? values[h] : '';
+  });
+
+  const dateCol = head.indexOf('Date');
+  const teamCol = head.indexOf('Team');
+  const oppCol  = head.indexOf('Opponent');
+
+  // One row per fixture: replace if this match is already there.
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (normaliseDate(data[i][dateCol]) === report.matchDate &&
+        String(data[i][teamCol]).trim() === report.team &&
+        String(data[i][oppCol]).trim() === report.opponent) {
+      sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+      return;
+    }
+  }
+  sheet.appendRow(row);
+}
+
+// The website has always shown surnames — "Hay (2)", "Bergqvist (4)".
+// Keep that, but add a first initial where the squad has two of a surname,
+// so Craig and Kevin McDougall stay tellable apart.
+function scorerLabels(ss, team, scorers, ownGoals) {
+  const clashes = surnameClashes(ss, team);
+
+  const labels = scorers.map(function (s) {
+    const parts = String(s.name).split(',');
+    const surname = parts[0].trim();
+    let label = surname;
+    if (parts.length === 2 && clashes[surname.toLowerCase()]) {
+      const forename = parts[1].trim();
+      if (forename) label = surname + ' ' + forename.charAt(0).toUpperCase();
+    }
+    return label + (s.goals > 1 ? ' (' + s.goals + ')' : '');
+  });
+
+  if (ownGoals > 0) {
+    labels.push('OG' + (ownGoals > 1 ? ' (' + ownGoals + ')' : ''));
+  }
+  return labels;
+}
+
+function surnameClashes(ss, team) {
+  const sheet = ss.getSheetByName(SHEET_ROSTER);
+  const counts = {};
+  if (!sheet) return {};
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] !== team) continue;
+    const surname = String(data[i][0]).split(',')[0].trim().toLowerCase();
+    counts[surname] = (counts[surname] || 0) + 1;
+  }
+  const clashes = {};
+  Object.keys(counts).forEach(function (k) { if (counts[k] > 1) clashes[k] = true; });
+  return clashes;
+}
+
+// One line per card: "Smith, John — sent off — violent conduct, 55 mins"
+function cardDetailCell(report) {
+  const lines = report.players
+    .filter(function (p) { return p.booked || p.sentOff; })
+    .map(function (p) {
+      const what = p.sentOff ? 'sent off' : 'booked';
+      const why = p.cardNote ? ' \u2014 ' + p.cardNote : '';
+      return p.name + ' \u2014 ' + what + why;
+    });
+  // A Google Form submission has no per-player notes, so keep its free text.
+  if (!lines.length) return report.cardDetail || '';
+  return lines.join('\n') + (report.cardDetail ? '\n' + report.cardDetail : '');
+}
+
+function goalscorerCell(scorers, ownGoals) {
+  const parts = scorers.map(function (s) {
+    return s.name + (s.goals > 1 ? ' (' + s.goals + ')' : '');
+  });
+  if (ownGoals > 0) parts.push('OG' + (ownGoals > 1 ? ' (' + ownGoals + ')' : ''));
+  return parts.join('; ');
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Roster
+// ════════════════════════════════════════════════════════════════════
+
+function syncRoster(ss, team, newNames) {
+  if (!newNames || !newNames.length) return;
+
+  const sheet = getOrCreate(ss, SHEET_ROSTER, ['Name', 'Team']);
+  const data = sheet.getDataRange().getValues();
+  const existing = {};
+  for (let i = 1; i < data.length; i++) {
+    existing[(data[i][0] + '|' + data[i][1]).toLowerCase().trim()] = true;
+  }
+
+  newNames.forEach(function (name) {
+    const key = (name + '|' + team).toLowerCase().trim();
+    if (!existing[key]) {
+      sheet.appendRow([name, team]);
+      existing[key] = true;
+    }
+  });
+}
+
+// The Roster remembers each player's position, so a captain sets it once
+// rather than every week. A later report simply overwrites it.
+function learnPositions(ss, team, updates) {
+  const names = Object.keys(updates || {});
+  if (!names.length) return;
+
+  const sheet = getOrCreate(ss, SHEET_ROSTER, ['Name', 'Team', 'Position']);
+  ensureHeaders(sheet, ['Name', 'Team', 'Position']);
+
+  const head = headerRow(sheet);
+  const posCol = head.indexOf('Position') + 1;
+  if (!posCol) return;
+
+  const data = sheet.getDataRange().getValues();
+  names.forEach(function (name) {
+    const pos = updates[name];
+    if (['GK', 'DEF', 'MID', 'FWD'].indexOf(pos) === -1) return;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === name && String(data[i][1]).trim() === team) {
+        sheet.getRange(i + 1, posCol).setValue(pos);
+        return;
+      }
+    }
+  });
+}
+
+// "Bishop, Alex (DEF); Hay, Jamie (GK)" → { "Bishop, Alex": "DEF", ... }
+function parsePositionCell(cell) {
+  const out = {};
+  splitNames(cell).forEach(function (entry) {
+    const m = String(entry).match(/^(.*?)\s*\((GK|DEF|MID|FWD)\)$/);
+    if (m) out[m[1].trim()] = m[2];
+  });
+  return out;
+}
+
+function updateGridForTeam(form, team) {
+  if (!form) return;
+  const ss = getSpreadsheet();
+  const rosterSheet = ss.getSheetByName(SHEET_ROSTER);
+  if (!rosterSheet) return;
+
+  const data = rosterSheet.getDataRange().getValues();
+  const list = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] === team) list.push(data[i][0]);
+  }
+  list.sort();
+  if (!list.length) return;
+
+  form.getItems(FormApp.ItemType.GRID).forEach(function (item) {
+    if (item.getTitle().indexOf(team) !== -1) {
+      item.asGridItem().setRows(list);
+    }
+  });
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Player stats
+// ════════════════════════════════════════════════════════════════════
+
+function updatePlayerStats(ss, team, played, cash, transfer, booked, sentOff, scorers) {
+  const sheet = getOrCreate(ss, SHEET_STATS, STATS_HEADERS);
+  ensureHeaders(sheet, STATS_HEADERS);
+
+  const head = headerRow(sheet);
+  const colOf = function (name) { return head.indexOf(name) + 1; };
+
+  played.forEach(function (p) {
+    const row = findOrAddStatsRow(sheet, p.name, team, head.length);
+    bump(sheet, row, colOf('Appearances'), 1);
+    if (p.role === 'Start') bump(sheet, row, colOf('Starts'), 1);
+    if (p.role === 'Sub')   bump(sheet, row, colOf('Sub Apps'), 1);
+  });
+
+  cash.forEach(function (p) {
+    bump(sheet, findOrAddStatsRow(sheet, p.name, team, head.length), colOf('Subs Paid'), 1);
+  });
+  transfer.forEach(function (p) {
+    bump(sheet, findOrAddStatsRow(sheet, p.name, team, head.length), colOf('Paid by Transfer'), 1);
+  });
+  booked.forEach(function (p) {
+    bump(sheet, findOrAddStatsRow(sheet, p.name, team, head.length), colOf('Booked'), 1);
+  });
+  sentOff.forEach(function (p) {
+    bump(sheet, findOrAddStatsRow(sheet, p.name, team, head.length), colOf('Sent Off'), 1);
+  });
+  scorers.forEach(function (s) {
+    bump(sheet, findOrAddStatsRow(sheet, s.name, team, head.length), colOf('Goals'), s.goals);
+  });
+}
+
+function findOrAddStatsRow(sheet, name, team, width) {
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === name && data[i][1] === team) return i + 1;
+  }
+  const blank = [name, team];
+  for (let j = 2; j < width; j++) blank.push(0);
+  sheet.appendRow(blank);
+  return sheet.getLastRow();
+}
+
+function bump(sheet, row, column, by) {
+  if (!column || !by) return;
+  const cell = sheet.getRange(row, column);
+  cell.setValue((Number(cell.getValue()) || 0) + by);
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Goal parsing — only ever used for Google Form submissions now
+// ════════════════════════════════════════════════════════════════════
+
+function matchScorersFromText(ss, team, scorersText) {
+  const out = [];
+  if (!scorersText || !scorersText.trim()) return out;
+
+  const rosterSheet = ss.getSheetByName(SHEET_ROSTER);
+  if (!rosterSheet) return out;
+
+  const data = rosterSheet.getDataRange().getValues();
+  const roster = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] === team) roster.push(data[i][0]);
+  }
+
+  scorersText.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+    .forEach(function (entry) {
+      const m = entry.match(/^(.*?)\s*\((\d+)\)$/);
+      const raw = m ? m[1].trim() : entry;
+      const count = m ? parseInt(m[2], 10) : 1;
+      if (raw.toUpperCase() === 'OG') return;
+
+      const found = roster.find(function (full) {
+        const surname = full.split(',')[0].trim().toLowerCase();
+        return surname === raw.toLowerCase() ||
+               full.toLowerCase().indexOf(raw.toLowerCase()) !== -1;
+      });
+
+      if (found) {
+        out.push({ name: found, goals: count });
+      } else {
+        const sheet = getOrCreate(ss, SHEET_UNMATCHED, ['Timestamp', 'Team', 'As Typed', 'Goals']);
+        sheet.appendRow([new Date(), team, raw, count]);
+      }
+    });
+
+  return out;
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Small helpers
+// ════════════════════════════════════════════════════════════════════
+
+function getSpreadsheet() {
+  if (SPREADSHEET_ID) return SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  // Bound to the sheet?
+  const active = SpreadsheetApp.getActiveSpreadsheet();
+  if (active) return active;
+
+  // Bound to the form? Then use whatever the form feeds.
+  const form = getFormOrNull();
+  if (form && form.getDestinationId()) {
+    return SpreadsheetApp.openById(form.getDestinationId());
+  }
+
+  throw new Error('No spreadsheet found. Set SPREADSHEET_ID at the top of this script.');
+}
+
+// FormApp.getActiveForm() throws or returns null unless the script is bound
+// to a form. The website path must not care either way.
+function getFormOrNull() {
+  try {
+    return FormApp.getActiveForm();
+  } catch (err) {
+    return null;
+  }
+}
+
+function getOrCreate(ss, name, headers) {
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold')
+         .setBackground('#0f172a').setFontColor('#ffffff');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function headerRow(sheet) {
+  const width = Math.max(1, sheet.getLastColumn());
+  return sheet.getRange(1, 1, 1, width).getValues()[0].map(String);
+}
+
+// Adds any columns this version needs without disturbing existing data.
+function ensureHeaders(sheet, wanted) {
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(wanted);
+    sheet.setFrozenRows(1);
+    return;
+  }
+  const head = headerRow(sheet);
+  const missing = wanted.filter(function (h) { return head.indexOf(h) === -1; });
+  if (missing.length) {
+    sheet.getRange(1, head.length + 1, 1, missing.length).setValues([missing])
+         .setFontWeight('bold').setBackground('#0f172a').setFontColor('#ffffff');
+  }
+}
+
+function appendByHeader(ss, sheetName, headers, values) {
+  const sheet = getOrCreate(ss, sheetName, headers);
+  ensureHeaders(sheet, headers);
+  forceTextColumns(sheet, TEXT_COLUMNS);
+  const head = headerRow(sheet);
+  const row = head.map(function (h) {
+    return Object.prototype.hasOwnProperty.call(values, h) ? values[h] : '';
+  });
+  sheet.appendRow(row);
+}
+
+function alreadyRecorded(ss, reportId) {
+  const sheet = ss.getSheetByName(SHEET_REPORTS);
+  if (!sheet || sheet.getLastRow() < 2) return false;
+  const head = headerRow(sheet);
+  const col = head.indexOf('Report ID');
+  if (col === -1) return false;
+  const values = sheet.getRange(2, col + 1, sheet.getLastRow() - 1, 1).getValues();
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][0]) === String(reportId)) return true;
+  }
+  return false;
+}
+
+function names(list) {
+  return list.map(function (p) { return p.name; });
+}
+
+function normalisePlayers(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map(function (p) {
+    return {
+      name:     String(p.name || '').trim(),
+      played:   p.played !== false,
+      role:     p.role === 'Sub' ? 'Sub' : 'Start',
+      position: ['GK', 'DEF', 'MID', 'FWD'].indexOf(p.position) === -1 ? '' : p.position,
+      subsPaid: !!p.subsPaid,
+      payment:  p.payment === 'Transfer' ? 'Transfer' : (p.subsPaid ? 'Paid' : ''),
+      // Set by the website's Subs & Costs step. null rather than 0 when
+      // absent — the Google Form sends no such field at all, and null is
+      // how writeSubsLedger() knows to fall back to subsAmountFor() instead
+      // of treating a missing figure as a genuine zero.
+      subsAmount: (typeof p.subsAmount === 'number' && p.subsAmount >= 0) ? p.subsAmount : null,
+      booked:   !!p.booked,
+      sentOff:  !!p.sentOff,
+      cardNote: String(p.cardNote || '').trim(),
+      goals:    Math.max(0, parseInt(p.goals, 10) || 0)
+    };
+  }).filter(function (p) { return p.name.length > 0; });
+}
+function normaliseNameList(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = {};
+  return list
+    .map(function (n) { return String(n || '').trim(); })
+    .filter(function (n) {
+      if (!n) return false;
+      const k = n.toLowerCase();
+      if (seen[k]) return false;
+      seen[k] = true;
+      return true;
+    });
+}
+function normaliseDate(value) {
+  if (!value) return '';
+  if (value instanceof Date) return Utilities.formatDate(value, 'Europe/London', 'yyyy-MM-dd');
+  const s = String(value).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);   // 15/08/2026, UK order
+  if (m) return m[3] + '-' + pad2(m[2]) + '-' + pad2(m[1]);
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? '' : Utilities.formatDate(d, 'Europe/London', 'yyyy-MM-dd');
+}
+
+function pad2(n) { return String(n).length < 2 ? '0' + n : String(n); }
+
+function toIntOrNull(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = parseInt(v, 10);
+  return isNaN(n) ? null : n;
+}
+
+// "3-2", "3 - 2", "3:2" → { us: 3, them: 2 }
+function parseScoreText(text) {
+  const m = String(text || '').match(/(\d+)\s*[-–:vV]\s*(\d+)/);
+  if (!m) return { us: null, them: null };
+  return { us: parseInt(m[1], 10), them: parseInt(m[2], 10) };
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Rebuilding stats from scratch
+// ════════════════════════════════════════════════════════════════════
+
+// The actual recount, with no locking of its own. Called two ways:
+//   - from rebuildPlayerStats() below, for a manual run, which wraps its
+//     own lock around this
+//   - directly from processReport(), which is already holding the script
+//     lock for the whole submission — asking for it a second time from
+//     inside the same execution just waits for itself and times out
+function rebuildPlayerStatsCore(ss) {
+  const reports = ss.getSheetByName(SHEET_REPORTS);
+  if (!reports || reports.getLastRow() < 2) {
+    Logger.log('No match reports to count.');
+    return;
+  }
+
+  // Start the totals tab empty, headers only.
+  const stats = getOrCreate(ss, SHEET_STATS, STATS_HEADERS);
+  ensureHeaders(stats, STATS_HEADERS);
+  if (stats.getLastRow() > 1) {
+    stats.deleteRows(2, stats.getLastRow() - 1);
+  }
+
+  const data = reports.getDataRange().getValues();
+  const head = data[0].map(String);
+  const at = function (row, name) {
+    const i = head.indexOf(name);
+    return i === -1 ? '' : row[i];
+  };
+
+  let counted = 0;
+  for (let r = 1; r < data.length; r++) {
+    const row = data[r];
+    const team = String(at(row, 'Team') || '').trim();
+    if (!team) continue;
+
+    const starting = splitNames(at(row, 'Starting'));
+    const bench    = splitNames(at(row, 'Bench'));
+    const cash     = splitNames(at(row, 'Subs Paid'));
+    const transfer = splitNames(at(row, 'Paid by Transfer'));
+    const booked   = splitNames(at(row, 'Booked'));
+    const sentOff  = splitNames(at(row, 'Sent Off'));
+    const scorers  = parseScorerCell(at(row, 'Goalscorers'));
+
+    const asPlayers = function (list, role) {
+      return list.map(function (n) { return { name: n, role: role }; });
+    };
+
+    updatePlayerStats(
+      ss, team,
+      asPlayers(starting, 'Start').concat(asPlayers(bench, 'Sub')),
+      asPlayers(cash, ''), asPlayers(transfer, ''),
+      asPlayers(booked, ''), asPlayers(sentOff, ''),
+      scorers
+    );
+    counted++;
+  }
+
+  Logger.log('Rebuilt Player Stats from ' + counted + ' match report(s).');
+}
+
+// Run by hand from the function dropdown. Takes its own lock, since nothing
+// else is already holding one when you run this directly.
+//
+// Delete any unwanted rows from Match Reports FIRST, then run this.
+function rebuildPlayerStats() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    rebuildPlayerStatsCore(getSpreadsheet());
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Splits a cell of names. New rows use semicolons. Older rows joined
+// "Surname, Forename" with commas, so fall back to reading them in pairs.
+function splitNames(cell) {
+  const s = String(cell || '').trim();
+  if (!s) return [];
+  if (s.indexOf(';') !== -1) {
+    return s.split(';').map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  const parts = s.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  if (parts.length < 2) return parts;
+  const out = [];
+  for (let i = 0; i + 1 < parts.length; i += 2) out.push(parts[i] + ', ' + parts[i + 1]);
+  if (parts.length % 2 === 1) out.push(parts[parts.length - 1]);
+  return out;
+}
+
+// "Bishop, Alex (2); Brookes, Gary; OG" → [{name, goals}], own goals dropped
+// because they belong to nobody.
+function parseScorerCell(cell) {
+  return splitNames(cell).map(function (entry) {
+    const m = entry.match(/^(.*?)\s*\((\d+)\)$/);
+    return {
+      name: (m ? m[1] : entry).trim(),
+      goals: m ? parseInt(m[2], 10) : 1
+    };
+  }).filter(function (s) {
+    return s.name && s.name.toUpperCase() !== 'OG';
+  });
+}
+
+
+// Formats the score columns as plain text so Sheets stops turning "1-2" into
+// a date, then rewrites any Results row whose score survives as numbers.
+// Rows written before the Goals For / Goals Against columns existed cannot be
+// recovered — delete those and file the report again.
+function repairScoreColumns() {
+  const ss = getSpreadsheet();
+  let mangled = 0;
+
+  [SHEET_REPORTS, SHEET_RESULTS].forEach(function (name) {
+    const sheet = ss.getSheetByName(name);
+    if (!sheet) return;
+    forceTextColumns(sheet, TEXT_COLUMNS);
+  });
+
+  const results = ss.getSheetByName(SHEET_RESULTS);
+  if (results && results.getLastRow() > 1) {
+    const head = headerRow(results);
+    const rCol = head.indexOf('Result') + 1;
+    const fCol = head.indexOf('Goals For') + 1;
+    const aCol = head.indexOf('Goals Against') + 1;
+    const data = results.getDataRange().getValues();
+
+    for (let i = 1; i < data.length; i++) {
+      const f = fCol ? data[i][fCol - 1] : '';
+      const a = aCol ? data[i][aCol - 1] : '';
+      if (f !== '' && a !== '' && f !== null && a !== null) {
+        results.getRange(i + 1, rCol).setValue(Number(f) + '-' + Number(a));
+      } else if (data[i][rCol - 1] instanceof Date) {
+        mangled++;
+        Logger.log('Row ' + (i + 1) + ' has a score Sheets turned into a date and ' +
+                   'no numbers to rebuild it from. Delete it and re-file that report.');
+      }
+    }
+  }
+
+  Logger.log('Score columns formatted as text. ' +
+             (mangled ? mangled + ' row(s) need re-filing.' : 'Nothing needed re-filing.'));
+}
+
+
+// The Results tab briefly had two columns inserted without its header row
+// being updated, leaving nine columns of data under seven headers. The data
+// is in the right order, so rewriting the header row realigns it.
+function repairResultsTab() {
+  const ss = getSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_RESULTS);
+  if (!sheet) {
+    Logger.log('No Results tab yet — nothing to repair.');
+    return;
+  }
+
+  const head = headerRow(sheet);
+  if (head.length >= RESULTS_HEADERS.length &&
+      head[4] === RESULTS_HEADERS[4]) {
+    Logger.log('Headers already correct.');
+    return;
+  }
+
+  sheet.getRange(1, 1, 1, RESULTS_HEADERS.length)
+       .setValues([RESULTS_HEADERS])
+       .setFontWeight('bold').setBackground('#0f172a').setFontColor('#ffffff');
+  sheet.setFrozenRows(1);
+  forceTextColumns(sheet, TEXT_COLUMNS);
+  Logger.log('Results headers rewritten. Check a row reads Date, Team, Opponent, ' +
+             'Result, Goals For, Goals Against, Scorers, Outcome, Updated.');
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Run these by hand
+// ════════════════════════════════════════════════════════════════════
+
+// Edit the word below, run once, then delete the word again and save.
+function setSharedSecret() {
+  PropertiesService.getScriptProperties()
+    .setProperty('SHARED_SECRET', 'CHANGE_ME_TO_SOMETHING_ONLY_THE_CLUB_KNOWS');
+  Logger.log('Shared secret stored.');
+}
+
+// Run once to create the Fixtures tab with the right headers. Then paste your
+// schedule in underneath — Date, Team, Opponent, Venue, Type.
+function createFixturesTab() {
+  const ss = getSpreadsheet();
+  if (ss.getSheetByName(SHEET_FIXTURES)) {
+    Logger.log('The Fixtures tab already exists.');
+    return;
+  }
+  const sheet = getOrCreate(ss, SHEET_FIXTURES,
+    ['Date', 'Team', 'Opponent', 'Venue', 'Type']);
+  sheet.getRange('A:A').setNumberFormat('yyyy-mm-dd');
+  sheet.setColumnWidth(3, 240);
+  Logger.log('Fixtures tab created. Paste your schedule in below the headers.');
+}
+
+function testUpdateAllGrids() {
+  const form = getFormOrNull();
+  if (!form) {
+    Logger.log('This script is not attached to a form, so there are no grids to refresh.');
+    return;
+  }
+  TEAMS.forEach(function (team) { updateGridForTeam(form, team); });
+}
+
+// Files a fake website report so you can watch every tab fill in.
+// Delete the rows afterwards.
+function testWebsiteReport() {
+  const out = processReport({
+    reportId:    'test-' + Utilities.getUuid(),
+    source:      'Website',
+    captain:     'Kinsella, Gerard',
+    team:        'Over 35s',
+    opponent:    'Test Opponent FC',
+    homeAway:    'Home',
+    matchDate:   '2026-08-15',
+    competition: 'League',
+    scoreFor:     3,
+    scoreAgainst: 2,
+    players: [
+      { name: 'Bishop, Alex',  played: true, role: 'Start', payment: 'Paid',     subsPaid: true,  booked: false, sentOff: false, goals: 2, subsAmount: 10 },
+      { name: 'Brookes, Gary', played: true, role: 'Start', payment: 'Paid',     subsPaid: true,  booked: true,  sentOff: false, goals: 1, subsAmount: 20 },
+      { name: 'Brennand, Carl',played: true, role: 'Sub',   payment: 'Transfer', subsPaid: true,  booked: false, sentOff: false, goals: 0 }
+    ],
+    ownGoals:   1,
+    motm:       'Bishop, Alex',
+    costs: { refFee: 15, kitCleaning: 5, pitchShare: 0, other: 0, otherNote: '' },
+    newPlayers: [],
+    cardDetail: 'Brookes — yellow, 70 mins',
+    notes:      'Test report, safe to delete.',
+    scorersText: ''
+  });
+  Logger.log(JSON.stringify(out));
+}
+/**
+ * Asks Netlify to rebuild the site, so a filed report reaches the website in
+ * a couple of minutes rather than whenever the next push happens.
+ *
+ * Three things this deliberately does NOT do:
+ *   • It never throws. The report is already saved by the time this runs, and
+ *     a Netlify outage must not cost a captain his teamsheet.
+ *   • It never fires for test runs, so testWebsiteReport() doesn't spend a
+ *     production deploy every time you use it.
+ *   • It holds no URL of its own. The hook lives in Script Properties, because
+ *     anyone with that URL can trigger builds on the site.
+ */
+function triggerSiteBuild(report) {
+  // testWebsiteReport() gives every run a reportId beginning "test-".
+  if (report && String(report.reportId || '').indexOf('test-') === 0) {
+    Logger.log('Build hook skipped — test report.');
+    return;
+  }
+
+  const url = PropertiesService.getScriptProperties()
+                .getProperty('NETLIFY_BUILD_HOOK');
+
+  if (report && isLocalOrigin(report.origin)) {
+    Logger.log('Build hook skipped — filed from ' + report.origin + ' (development).');
+    return;
+  }
+  if (!url) {
+    Logger.log('Build hook skipped — NETLIFY_BUILD_HOOK is not set.');
+    return;
+  }
+
+  try {
+    const res = UrlFetchApp.fetch(url, {
+      method: 'post',
+      payload: '{}',
+      contentType: 'application/json',
+      muteHttpExceptions: true
+    });
+    const code = res.getResponseCode();
+    if (code >= 200 && code < 300) {
+      Logger.log('Netlify build requested.');
+    } else {
+      Logger.log('Build hook returned HTTP ' + code);
+    }
+  } catch (err) {
+    Logger.log('Build hook failed: ' + err.message);
+  }
+}
+/**
+ * Was this report filed from a development machine rather than the live site?
+ *
+ * An unknown or missing hostname counts as LIVE, deliberately. The Google Form
+ * fallback sends no origin at all, and a genuine report that fails to trigger
+ * a rebuild is a real problem — a captain files on Saturday and the site never
+ * shows it. A wasted build is merely untidy. So the doubt goes to rebuilding.
+ */
+function isLocalOrigin(host) {
+  host = String(host || '').toLowerCase().trim();
+  if (!host) return false;
+
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return true;
+  if (host.slice(-6) === '.local') return true;
+
+  // Private ranges — covers phone-on-the-same-wifi testing via --host.
+  if (host.indexOf('192.168.') === 0) return true;
+  if (host.indexOf('10.') === 0) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
+
+  return false;
+}
+// Run once. Then add one row per manager — Open Age gets two.
+function createManagersTab() {
+  const ss = getSpreadsheet();
+  if (ss.getSheetByName(SHEET_MANAGERS)) {
+    Logger.log('The Managers tab already exists.');
+    return;
+  }
+  getOrCreate(ss, SHEET_MANAGERS, ['Team', 'Manager']);
+  Logger.log('Managers tab created. Team, then Manager as Surname, Forename.');
+}
+// ════════════════════════════════════════════════════════════════════
+// PLAYER REGISTRATIONS
+// ════════════════════════════════════════════════════════════════════
+
+/**
+ * A player registration from the website.
+ *
+ * This is the only part of the system that handles personal data — home
+ * address, date of birth, phone. Three rules follow from that and are worth
+ * stating rather than leaving implied:
+ *
+ *   1. Nothing here is ever exposed through doGet. See the allow-list above.
+ *   2. Nothing is written to the Roster automatically. A registration is an
+ *      application, not a squad place — a committee member moves it across.
+ *   3. The reply to the browser never echoes back what was submitted, so a
+ *      shared phone doesn't leave someone's details on screen.
+ */
+function processRegistration(payload) {
+  // The honeypot. A real person never sees this field, so anything in it is
+  // a bot filling every input it can find. Answer as though it worked —
+  // telling a bot it failed just teaches it to try again differently.
+  if (String(payload.website || '').trim() !== '') {
+    Logger.log('Registration discarded — honeypot filled.');
+    return { ok: true, message: 'Thanks — your registration has been sent.' };
+  }
+
+  // Nobody reads a form, finds their National Insurance-era memories of their
+  // own postcode, and types all this in under three seconds.
+  if (Number(payload.elapsedMs || 0) < 3000) {
+    Logger.log('Registration discarded — submitted too fast.');
+    return { ok: true, message: 'Thanks — your registration has been sent.' };
+  }
+
+  const forename = String(payload.forename || '').trim();
+  const surname  = String(payload.surname || '').trim();
+  const email    = String(payload.email || '').trim();
+
+  if (!forename || !surname) {
+    return { ok: false, error: 'Please give both your first name and surname.' };
+  }
+  if (!email || email.indexOf('@') === -1) {
+    return { ok: false, error: 'Please give an email address we can reach you on.' };
+  }
+  if (payload.consent !== true) {
+    return { ok: false, error: 'Please tick the box to say we can hold your details.' };
+  }
+
+  // Stored the same way as every other name in the system, so promoting an
+  // approved registration to the Roster is a copy and paste.
+  const name = surname + ', ' + forename;
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = getSpreadsheet();
+    const sheet = getOrCreate(ss, SHEET_REGISTRATIONS, REGISTRATION_HEADERS);
+    ensureHeaders(sheet, REGISTRATION_HEADERS);
+
+    // A second tap on a slow connection shouldn't produce two rows.
+    if (alreadyRegistered(sheet, name, email)) {
+      return { ok: true, duplicate: true,
+               message: 'You have already registered — we will be in touch.' };
+    }
+
+    const values = {
+      'Timestamp':      new Date(),
+      'Name':           name,
+      'Date of Birth':  normaliseDate(payload.dob),
+      'Address':        String(payload.address || '').trim(),
+      'Postcode':       String(payload.postcode || '').trim().toUpperCase(),
+      'Email':          email,
+      'Phone':          String(payload.phone || '').trim(),
+      'Preferred Team': String(payload.preferredTeam || '').trim(),
+      'Notes':          String(payload.notes || '').trim(),
+      'Consent':        'Yes',
+      'Status':         'New'
+    };
+
+    const head = headerRow(sheet);
+    sheet.appendRow(head.map(function (h) {
+      return Object.prototype.hasOwnProperty.call(values, h) ? values[h] : '';
+    }));
+
+    notifyRegistration(values);
+
+    return { ok: true, message: 'Thanks — your registration has been sent.' };
+
+  } catch (err) {
+    Logger.log('processRegistration failed: ' + err.message);
+    return { ok: false, error: 'Could not save your registration: ' + err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function alreadyRegistered(sheet, name, email) {
+  if (sheet.getLastRow() < 2) return false;
+
+  const head = headerRow(sheet);
+  const nameCol = head.indexOf('Name');
+  const mailCol = head.indexOf('Email');
+  if (nameCol === -1 || mailCol === -1) return false;
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    const sameName = String(data[i][nameCol]).trim().toLowerCase() === name.toLowerCase();
+    const sameMail = String(data[i][mailCol]).trim().toLowerCase() === email.toLowerCase();
+    if (sameName && sameMail) return true;
+  }
+  return false;
+}
+
+/**
+ * Emails the club when a match report is filed, so you find out without
+ * having to check the site or the spreadsheet.
+ *
+ * Skipped for test reports, same rule as triggerSiteBuild — a click of
+ * testWebsiteReport() shouldn't land in your inbox. Never throws: the report
+ * is already saved by the time this runs, so a mail problem here must not
+ * look like the report itself failed.
+ */
+function notifyMatchReport(report, playedCount, scorers) {
+  if (report && String(report.reportId || '').indexOf('test-') === 0) return;
+
+  try {
+    const to = PropertiesService.getScriptProperties()
+                 .getProperty('MATCH_REPORT_EMAIL');
+    if (!to) {
+      Logger.log('Match report email skipped — MATCH_REPORT_EMAIL is not set.');
+      return;
+    }
+
+    const scoreText = (report.scoreFor === null || report.scoreAgainst === null)
+      ? 'Score not recorded'
+      : report.team + ' ' + report.scoreFor + ' - ' + report.scoreAgainst + ' ' + report.opponent;
+
+    const scorerLines = scorers.length
+      ? scorers.map(function (s) { return '  ' + s.name + (s.goals > 1 ? ' (' + s.goals + ')' : ''); }).join('\n')
+      : '  None recorded';
+
+    const lines = [
+      'A match report has just been filed.',
+      '',
+      scoreText,
+      report.matchDate + ' \u2014 ' + (report.homeAway || 'Venue not stated') + ' \u2014 ' + (report.competition || 'Competition not stated'),
+      '',
+      'Submitter: ' + (report.captain || 'Not stated'),
+      'Managers:  ' + ((report.managers || []).join(', ') || 'Not stated'),
+      'Filed via: ' + report.source,
+      'Players:   ' + playedCount,
+      '',
+      'Scorers:',
+      scorerLines,
+      '',
+      'Full teamsheet and notes are on the Match Reports tab.'
+    ];
+
+    MailApp.sendEmail({
+      to: to,
+      subject: 'Match report filed \u2014 ' + report.team + ' v ' + report.opponent,
+      body: lines.join('\n')
+    });
+
+  } catch (err) {
+    Logger.log('Match report email failed: ' + err.message);
+  }
+}
+
+// Run once. Edit the address first, then blank it out again afterwards.
+function setMatchReportEmail() {
+  PropertiesService.getScriptProperties()
+    .setProperty('MATCH_REPORT_EMAIL', 'SET MATCH REPORT EMAIL');
+  Logger.log('Match report notification address stored.');
+}
+
+
+/**
+ * Emails the club when someone registers, so the current habit of finding out
+ * by inbox survives the move off Hostinger.
+ *
+ * Never throws: the row is already saved by the time this runs, and a mail
+ * quota problem must not cost the club a registration.
+ */
+function notifyRegistration(values) {
+  try {
+    const to = PropertiesService.getScriptProperties()
+                 .getProperty('REGISTRATION_EMAIL');
+    if (!to) {
+      Logger.log('Registration email skipped — REGISTRATION_EMAIL is not set.');
+      return;
+    }
+
+    const lines = [
+      'A new player registration has come in through the website.',
+      '',
+      'Name:            ' + values['Name'],
+      'Date of birth:   ' + values['Date of Birth'],
+      'Email:           ' + values['Email'],
+      'Phone:           ' + values['Phone'],
+      'Preferred team:  ' + (values['Preferred Team'] || 'Not stated'),
+      '',
+      'Address:',
+      values['Address'],
+      values['Postcode'],
+      '',
+      'Notes:',
+      values['Notes'] || '(none)',
+      '',
+      'The full record is on the Registrations tab of the club spreadsheet.',
+      'Move the player to the Roster tab once approved.'
+    ];
+
+    MailApp.sendEmail({
+      to: to,
+      subject: 'New player registration — ' + values['Name'],
+      body: lines.join('\n')
+    });
+
+  } catch (err) {
+    Logger.log('Registration email failed: ' + err.message);
+  }
+}
+
+// Run once. Edit the address first, then blank it out again afterwards.
+function setRegistrationEmail() {
+  PropertiesService.getScriptProperties()
+    .setProperty('REGISTRATION_EMAIL', 'PUT_THE_CLUB_ADDRESS_HERE');
+  Logger.log('Registration notification address stored.');
+}
+
+// Run once to create the tab with the right headers and sensible widths.
+function createRegistrationsTab() {
+  const ss = getSpreadsheet();
+  if (ss.getSheetByName(SHEET_REGISTRATIONS)) {
+    Logger.log('The Registrations tab already exists.');
+    return;
+  }
+  const sheet = getOrCreate(ss, SHEET_REGISTRATIONS, REGISTRATION_HEADERS);
+  sheet.setColumnWidth(4, 260);   // Address
+  sheet.setColumnWidth(9, 260);   // Notes
+  Logger.log('Registrations tab created.');
+}
+
+// ════════════════════════════════════════════════════════════════════
+// SUBS LEDGER & MATCH COSTS
+// ════════════════════════════════════════════════════════════════════
+//
+// Two tabs, both filled in automatically the moment a report is filed —
+// nothing here is public, nothing here is served through doGet.
+//
+//   Subs Ledger  — one row per player per match. Cash starts ticked as
+//                  Received (the captain's already got it in hand); Transfer
+//                  and Unpaid start unticked, which IS the "who do I still
+//                  need to chase" list — just filter the sheet on Received.
+//                  Marking someone paid is ticking the box, nothing more.
+//
+//   Match Costs  — one row per match, ref fee / kit / pitch / other left
+//                  blank for a committee member to fill in by hand. Nothing
+//                  here can be inferred automatically, so nothing is guessed.
+
+const SHEET_SUBS_LEDGER = 'Subs Ledger';
+const SHEET_MATCH_COSTS = 'Match Costs';
+
+const SUBS_LEDGER_HEADERS = [
+  'Match Date', 'Team', 'Opponent', 'Player', 'Amount', 'Method',
+  'Received', 'Received Date', 'Notes'
+];
+
+const MATCH_COSTS_HEADERS = [
+  'Match Date', 'Team', 'Opponent',
+  'Ref Fee', 'Kit Cleaning', 'Pitch Share', 'Other Cost', 'Other Note',
+  'Cash Collected', 'Hard Costs Total', 'Net Owed by Captain',
+  'Received', 'Received Date'
+];
+
+const SUBS_FULL = 10;
+const SUBS_INTERCLUB = 5;
+const SUBS_FIRST_GAME = 0;
+
+/**
+ * What a player owes for this game, worked out automatically:
+ *   - their first-ever appearance for the club, at this team, is free
+ *   - an inter-club game is a flat reduced rate
+ *   - otherwise, the normal fee
+ *
+ * This deliberately does NOT try to cover every exception — a genuine
+ * one-off (someone skint that week, whatever the reason) is a number
+ * you correct by hand in the sheet. Teaching the script every possible
+ * exception would be slower and more fragile than just fixing a cell.
+ */
+function subsAmountFor(ss, name, team, interClub) {
+  if (priorAppearances(ss, name, team) === 0) return SUBS_FIRST_GAME;
+  return interClub ? SUBS_INTERCLUB : SUBS_FULL;
+}
+
+// Reads Player Stats directly rather than through findOrAddStatsRow, so
+// checking a player's history never itself creates a row — this must stay
+// a read, since it runs BEFORE rebuildPlayerStatsCore() recounts the totals
+// for today's game.
+function priorAppearances(ss, name, team) {
+  const sheet = ss.getSheetByName(SHEET_STATS);
+  if (!sheet || sheet.getLastRow() < 2) return 0;
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === name && data[i][1] === team) {
+      return Number(data[i][2]) || 0; // 'Appearances' is column C
+    }
+  }
+  return 0;
+}
+
+/**
+ * One ledger row per player who played. Call this BEFORE
+ * rebuildPlayerStatsCore() runs in processReport, so subsAmountFor() still
+ * sees last week's totals rather than this week's.
+ */
+function writeSubsLedger(ss, report, played) {
+  clearSubsLedgerForMatch(ss, report);
+  const sheet = getOrCreate(ss, SHEET_SUBS_LEDGER, SUBS_LEDGER_HEADERS);
+  ensureHeaders(sheet, SUBS_LEDGER_HEADERS);
+  const head = headerRow(sheet);
+
+  played.forEach(function (p) {
+    const method = p.payment === 'Transfer' ? 'Transfer'
+                  : p.payment === 'Paid' ? 'Cash'
+                  : 'Unpaid';
+
+    const amount = (typeof p.subsAmount === 'number')
+      ? p.subsAmount
+      : subsAmountFor(ss, p.name, report.team, report.interClub);
+
+    // Cash is already in the captain's pocket by the time this is filed.
+    // Transfer and Unpaid start unticked — together they ARE the chase list.
+    const received = method === 'Cash';
+
+    const values = {
+      'Match Date': report.matchDate,
+      'Team':       report.team,
+      'Opponent':   report.opponent,
+      'Player':     p.name,
+      'Amount':     amount,
+      'Method':     method,
+      'Received':   received,
+      'Received Date': received ? new Date() : '',
+      'Notes':      ''
+    };
+
+    sheet.appendRow(head.map(function (h) {
+      return Object.prototype.hasOwnProperty.call(values, h) ? values[h] : '';
+    }));
+
+    // Checkbox formatting on this one row only, not a block of rows ahead
+    // of it — see the note on createFinanceTabs() for why.
+    const receivedCol = head.indexOf('Received') + 1;
+    if (receivedCol) {
+      sheet.getRange(sheet.getLastRow(), receivedCol).insertCheckboxes();
+    }
+  });
+}
+
+/**
+ * Cash Collected, Hard Costs Total and Net Owed by Captain are live
+ * formulas, not values written once — Cash Collected can shift if a Subs
+ * Ledger row is corrected later, so a static number would go stale the
+ * moment that happened. Received gets a checkbox, but only if the cell is
+ * genuinely still blank — an upsert on an existing row must never disturb a
+ * tick a committee member has already made.
+ */
+function setMatchCostsFormulas(sheet, row, head) {
+  const col = function (name) { return head.indexOf(name) + 1; };
+  const letter = function (n) {
+    let s = '';
+    while (n > 0) {
+      const m = (n - 1) % 26;
+      s = String.fromCharCode(65 + m) + s;
+      n = Math.floor((n - 1) / 26);
+    }
+    return s;
+  };
+
+  const cashCol = col('Cash Collected');
+  const hardCol = col('Hard Costs Total');
+  const netCol = col('Net Owed by Captain');
+  const receivedCol = col('Received');
+  const refCol = col('Ref Fee');
+  const otherCol = col('Other Cost');
+
+  if (cashCol) {
+    // Sums every Cash row in Subs Ledger for this exact match — the same
+    // date, team and opponent, read off this row's own A/B/C cells so the
+    // formula stays correct even if rows above it are inserted or deleted.
+    sheet.getRange(row, cashCol).setFormula(
+      "=SUMIFS('Subs Ledger'!E:E,'Subs Ledger'!A:A,A" + row +
+      ",'Subs Ledger'!B:B,B" + row +
+      ",'Subs Ledger'!C:C,C" + row +
+      ",'Subs Ledger'!F:F,\"Cash\")"
+    );
+    sheet.getRange(row, cashCol).setNumberFormat('£0.00');
+  }
+  if (hardCol) {
+    sheet.getRange(row, hardCol).setFormula(
+      '=SUM(' + letter(refCol) + row + ':' + letter(otherCol) + row + ')'
+    );
+    sheet.getRange(row, hardCol).setNumberFormat('£0.00');
+  }
+  if (netCol) {
+    sheet.getRange(row, netCol).setFormula(
+      '=' + letter(cashCol) + row + '-' + letter(hardCol) + row
+    );
+    sheet.getRange(row, netCol).setNumberFormat('£0.00');
+  }
+  if (receivedCol) {
+    const cell = sheet.getRange(row, receivedCol);
+    const current = cell.getValue();
+    if (current === '' || current === null) {
+      cell.insertCheckboxes();
+    }
+  }
+}
+
+/**
+ * Writes the hard costs the captain entered on the Subs & Costs step of the
+ * report form directly into this match's row — that was the whole point of
+ * moving those fields into the form rather than leaving them for a
+ * committee member to fill in later.
+ *
+ * A resubmission updates the cost figures on the existing row rather than
+ * duplicating it, same principle as upsertReportRow for Match Reports and
+ * clearSubsLedgerForMatch for Subs Ledger. Received and Received Date are
+ * never touched here, in either the new-row or the existing-row path — if
+ * someone has already ticked the balance as transferred, refiling the match
+ * report must not silently untick it.
+ */
+function ensureMatchCostsRow(ss, report) {
+  const sheet = getOrCreate(ss, SHEET_MATCH_COSTS, MATCH_COSTS_HEADERS);
+  ensureHeaders(sheet, MATCH_COSTS_HEADERS);
+  const head = headerRow(sheet);
+
+  const dateCol = head.indexOf('Match Date');
+  const teamCol = head.indexOf('Team');
+  const oppCol  = head.indexOf('Opponent');
+
+  const c = report.costs || {};
+  const costValues = {
+    'Ref Fee':      Number(c.refFee) || 0,
+    'Kit Cleaning': Number(c.kitCleaning) || 0,
+    'Pitch Share':  Number(c.pitchShare) || 0,
+    'Other Cost':   Number(c.other) || 0,
+    'Other Note':   c.otherNote || ''
+  };
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (normaliseDate(data[i][dateCol]) === report.matchDate &&
+        String(data[i][teamCol]).trim() === report.team &&
+        String(data[i][oppCol]).trim() === report.opponent) {
+      const row = i + 1;
+      Object.keys(costValues).forEach(function (col) {
+        const c = head.indexOf(col);
+        if (c !== -1) sheet.getRange(row, c + 1).setValue(costValues[col]);
+      });
+      setMatchCostsFormulas(sheet, row, head);
+      return;
+    }
+  }
+
+  const values = Object.assign(
+    { 'Match Date': report.matchDate, 'Team': report.team, 'Opponent': report.opponent },
+    costValues
+  );
+  sheet.appendRow(head.map(function (h) {
+    return Object.prototype.hasOwnProperty.call(values, h) ? values[h] : '';
+  }));
+  setMatchCostsFormulas(sheet, sheet.getLastRow(), head);
+}
+
+// Run once to create both tabs with headers and currency formatting, and to
+// backfill formulas onto any Match Costs rows that already existed before
+// the Cash Collected / Hard Costs Total / Net Owed by Captain columns did.
+// Safe to run again later — it only ever adds formulas to rows that don't
+// have the right ones, never touches Received.
+//
+// Deliberately does NOT pre-apply checkbox formatting across a block of
+// empty rows — doing that once gave every one of those rows a FALSE value,
+// which made appendRow() think the sheet was already full and start
+// writing new data 1000 rows down instead of at row 2. Checkboxes are
+// applied one row at a time instead, only on the row that's just been
+// written to, inside writeSubsLedger and setMatchCostsFormulas.
+function createFinanceTabs() {
+  const ss = getSpreadsheet();
+
+  getOrCreate(ss, SHEET_SUBS_LEDGER, SUBS_LEDGER_HEADERS);
+
+  const costs = getOrCreate(ss, SHEET_MATCH_COSTS, MATCH_COSTS_HEADERS);
+  ensureHeaders(costs, MATCH_COSTS_HEADERS);
+  ['Ref Fee', 'Kit Cleaning', 'Pitch Share', 'Other Cost'].forEach(function (col) {
+    const i = headerRow(costs).indexOf(col) + 1;
+    if (i) costs.getRange(2, i, costs.getMaxRows() - 1, 1).setNumberFormat('£0.00');
+  });
+
+  const head = headerRow(costs);
+  const netCol = head.indexOf('Net Owed by Captain') + 1;
+  if (netCol && costs.getLastRow() > 1) {
+    let backfilled = 0;
+    for (let row = 2; row <= costs.getLastRow(); row++) {
+      if (costs.getRange(row, netCol).getFormula() === '') {
+        setMatchCostsFormulas(costs, row, head);
+        backfilled++;
+      }
+    }
+    if (backfilled) Logger.log('Backfilled formulas on ' + backfilled + ' existing Match Costs row(s).');
+  }
+
+  Logger.log('Subs Ledger and Match Costs tabs ready.');
+}
+
+// A resubmission for a match that's already been filed should correct the
+// existing row, not add a second one — a captain and manager both filing,
+// or a captain refiling after a mistake, is a correction, not a new match.
+//
+// Takes exactly three arguments: (ss, headers, values). It looks up
+// SHEET_REPORTS itself, so it must never be called with the sheet name as
+// a separate argument — doing so shifts every later argument along by one,
+// which silently drops the real values object and throws deep inside
+// ensureHeaders instead, far from the actual mistake.
+function upsertReportRow(ss, headers, values) {
+  const sheet = getOrCreate(ss, SHEET_REPORTS, headers);
+  ensureHeaders(sheet, headers);
+  forceTextColumns(sheet, TEXT_COLUMNS);
+  const head = headerRow(sheet);
+  const row = head.map(function (h) {
+    return Object.prototype.hasOwnProperty.call(values, h) ? values[h] : '';
+  });
+
+  const teamCol = head.indexOf('Team');
+  const oppCol = head.indexOf('Opponent');
+  const dateCol = head.indexOf('Match Date');
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (normaliseDate(data[i][dateCol]) === values['Match Date'] &&
+        String(data[i][teamCol]).trim() === values['Team'] &&
+        String(data[i][oppCol]).trim() === values['Opponent']) {
+      sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+      return;
+    }
+  }
+  sheet.appendRow(row);
+}
+
+// Clears any existing Subs Ledger rows for this match before writeSubsLedger
+// writes fresh ones — otherwise a resubmission doubles every player's row
+// rather than correcting it, the same problem upsertReportRow solves for
+// Match Reports.
+function clearSubsLedgerForMatch(ss, report) {
+  const sheet = ss.getSheetByName(SHEET_SUBS_LEDGER);
+  if (!sheet || sheet.getLastRow() < 2) return;
+  const head = headerRow(sheet);
+  const dateCol = head.indexOf('Match Date');
+  const teamCol = head.indexOf('Team');
+  const oppCol = head.indexOf('Opponent');
+  const data = sheet.getDataRange().getValues();
+  // Bottom-up, so deleting a row doesn't shift the ones still to check.
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (normaliseDate(data[i][dateCol]) === report.matchDate &&
+        String(data[i][teamCol]).trim() === report.team &&
+        String(data[i][oppCol]).trim() === report.opponent) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+}
+
+/**
+ * Ticking Received in either finance tab stamps the date automatically,
+ * whoever ticks it and whenever they do it — a plain trigger like this
+ * needs no setup beyond existing in the file, Apps Script wires it up on
+ * its own the moment the project is saved.
+ *
+ * Deliberately narrow: it only reacts to the Received column, on those two
+ * sheets, on a single-cell edit — anything else is left alone rather than
+ * risked. Wrapped in try/catch because a trigger that throws can otherwise
+ * silently stop firing for every future edit until someone notices.
+ */
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    const sheet = e.range.getSheet();
+    const name = sheet.getName();
+    if (name !== SHEET_SUBS_LEDGER && name !== SHEET_MATCH_COSTS) return;
+    if (e.range.getNumRows() !== 1 || e.range.getNumColumns() !== 1) return;
+    if (e.range.getRow() === 1) return;
+
+    const head = headerRow(sheet);
+    const receivedCol = head.indexOf('Received') + 1;
+    const dateCol = head.indexOf('Received Date') + 1;
+    if (!receivedCol || !dateCol) return;
+    if (e.range.getColumn() !== receivedCol) return;
+
+    const checked = e.range.getValue() === true;
+    sheet.getRange(e.range.getRow(), dateCol).setValue(checked ? new Date() : '');
+  } catch (err) {
+    Logger.log('onEdit failed: ' + err.message);
+  }
+}

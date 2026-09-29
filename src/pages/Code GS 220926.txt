@@ -1,0 +1,718 @@
+// ════════════════════════════════════════════════════════════════════
+// Sefton Veterans FC — Weekly Match Report automation (v3)
+// ════════════════════════════════════════════════════════════════════
+//
+// WHAT CHANGED FROM v2
+//   • Two ways in, one way through. The Google Form (onFormSubmit) and the
+//     website page (doPost) both build the same `report` object and hand it
+//     to processReport(). Neither can break the other.
+//   • Repeat submissions of the same report are ignored, so a retry from a
+//     phone with bad signal cannot double-count appearances.
+//   • Website reports record who started and who was a sub.
+//   • Website reports name goalscorers exactly, so nothing lands in
+//     "Unmatched Scorers" any more. Form reports still use the text parser.
+//   • A "Results" tab is written for the website to read back.
+//
+// SETUP
+//   1. This script stays bound to the FORM (Form → ⋮ → Script editor).
+//   2. Run setSharedSecret() once, after editing the value inside it.
+//   3. Deploy → New deployment → Web app
+//        Execute as:     Me
+//        Who has access: Anyone
+//      Copy the /exec URL into match-report.astro as ENDPOINT.
+//   4. Re-deploy (Deploy → Manage deployments → edit → Deploy) after any
+//      later edit, or the website keeps hitting the old version.
+// ════════════════════════════════════════════════════════════════════
+
+// The spreadsheet this script writes to. Set explicitly so the script works
+// whether it is bound to the form, bound to the sheet, or standalone.
+const SPREADSHEET_ID = '1L23J3t3Chk4P74kqvAIxPUErwY20ZjBeL5_SmAZQreI';
+
+const TEAMS = ['Over 35s', 'Over 45s', 'Over 50s', 'Open Age'];
+
+const SHEET_ROSTER    = 'Roster';
+const SHEET_REPORTS   = 'Match Reports';
+const SHEET_STATS     = 'Player Stats';
+const SHEET_RESULTS   = 'Results';
+const SHEET_UNMATCHED = 'Unmatched Scorers';
+
+const REPORT_HEADERS = [
+  'Timestamp', 'Report ID', 'Source', 'Captain', 'Team', 'Opponent',
+  'Home/Away', 'Match Date', 'Competition', 'Score',
+  'Starting', 'Bench', 'Subs Paid', 'Paid by Transfer', 'Unpaid', 'Booked', 'Sent Off',
+  'Goalscorers', 'Own Goals', 'Goalscorers (as typed)', 'Booking Detail', 'Notes'
+];
+
+const STATS_HEADERS = [
+  'Name', 'Team', 'Appearances', 'Starts', 'Sub Apps',
+  'Goals', 'Booked', 'Sent Off', 'Subs Paid', 'Paid by Transfer'
+];
+
+const RESULTS_HEADERS = [
+  'Date', 'Team', 'Opponent', 'Result', 'Scorers', 'Outcome', 'Updated'
+];
+
+
+// ════════════════════════════════════════════════════════════════════
+// Way in #1 — the website
+// ════════════════════════════════════════════════════════════════════
+
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return jsonOut({ ok: false, error: 'Empty request.' });
+    }
+
+    const payload = JSON.parse(e.postData.contents);
+
+    const expected = PropertiesService.getScriptProperties().getProperty('SHARED_SECRET');
+    if (!expected || String(payload.secret || '') !== expected) {
+      return jsonOut({ ok: false, error: 'Not authorised.' });
+    }
+
+    if (!payload.team || TEAMS.indexOf(payload.team) === -1) {
+      return jsonOut({ ok: false, error: 'Unknown team: ' + payload.team });
+    }
+
+    const report = {
+      reportId:   String(payload.reportId || ''),
+      source:     'Website',
+      captain:    String(payload.captain || ''),
+      team:       payload.team,
+      opponent:   String(payload.opponent || '').trim(),
+      homeAway:   String(payload.homeAway || ''),
+      matchDate:  normaliseDate(payload.matchDate),
+      competition: String(payload.competition || ''),
+      scoreFor:     toIntOrNull(payload.scoreFor),
+      scoreAgainst: toIntOrNull(payload.scoreAgainst),
+      players:    normalisePlayers(payload.players),
+      ownGoals:   Math.max(0, parseInt(payload.ownGoals, 10) || 0),
+      newPlayers: (payload.newPlayers || []).map(function (n) { return String(n).trim(); })
+                    .filter(function (n) { return n.length > 0; }),
+      cardDetail: '',
+      notes:      String(payload.notes || ''),
+      scorersText: ''
+    };
+
+    const result = processReport(report);
+    return jsonOut(result);
+
+  } catch (err) {
+    // Never throw back at the phone — the captain can't act on a stack trace.
+    Logger.log('doPost failed: ' + err.message);
+    return jsonOut({ ok: false, error: 'Could not save the report: ' + err.message });
+  }
+}
+
+function jsonOut(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Way in #2 — the Google Form (unchanged behaviour, new plumbing)
+// ════════════════════════════════════════════════════════════════════
+
+function onFormSubmit(e) {
+  if (!e || !e.response) return;   // only fires in a form-bound project
+  const itemResponses = e.response.getItemResponses();
+
+  let team = null, captain = '', opponent = '', homeAway = '';
+  let matchDate = '', score = '';
+  let otherPlayersText = '', goalscorersText = '';
+  let bookingDetailText = '', notesText = '';
+  let gridResponse = null, gridRows = null;
+
+  for (const itemResponse of itemResponses) {
+    const item = itemResponse.getItem();
+    const title = item.getTitle();
+    const response = itemResponse.getResponse();
+
+    if (title === 'Your Name') captain = response;
+    if (title === 'Team') team = response;
+    if (title === 'Opponent') opponent = response;
+    if (title === 'Home or Away') homeAway = response;
+    if (title === 'Match date') matchDate = response;
+    if (title === 'Final score') score = response;
+    if (title.indexOf('Any other player') !== -1) otherPlayersText = response || '';
+    if (title.indexOf('Goalscorers') !== -1) goalscorersText = response || '';
+    if (title.indexOf('Booking') !== -1) bookingDetailText = response || '';
+    if (title.indexOf('other notes') !== -1) notesText = response || '';
+
+    if (item.getType() === FormApp.ItemType.GRID) {
+      gridResponse = response;
+      gridRows = item.asGridItem().getRows();
+    }
+  }
+
+  if (!team) return;
+
+  const newNames = otherPlayersText
+    .split(';')
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s.length > 0; });
+
+  // Turn the grid into the same player shape the website sends.
+  const players = [];
+  if (gridResponse && gridRows) {
+    for (let i = 0; i < gridRows.length; i++) {
+      const cols = gridResponse[i] || [];
+      if (cols.indexOf('Played') === -1 &&
+          cols.indexOf('Subs Paid') === -1 &&
+          cols.indexOf('Booked') === -1 &&
+          cols.indexOf('Sent Off') === -1) continue;
+
+      players.push({
+        name:     gridRows[i],
+        played:   cols.indexOf('Played') !== -1,
+        role:     '',                      // the form can't tell us this
+        subsPaid: cols.indexOf('Subs Paid') !== -1,
+        booked:   cols.indexOf('Booked')    !== -1,
+        sentOff:  cols.indexOf('Sent Off')  !== -1,
+        goals:    null                     // parsed from the text instead
+      });
+    }
+  }
+  newNames.forEach(function (name) {
+    players.push({ name: name, played: true, role: '', subsPaid: false,
+                   booked: false, sentOff: false, goals: null });
+  });
+
+  const parsedScore = parseScoreText(score);
+
+  processReport({
+    reportId:    'form-' + (e.response.getId ? e.response.getId() : Utilities.getUuid()),
+    source:      'Google Form',
+    captain:     captain,
+    team:        team,
+    opponent:    String(opponent || '').trim(),
+    homeAway:    homeAway,
+    matchDate:   normaliseDate(matchDate),
+    competition: '',
+    scoreFor:     parsedScore.us,
+    scoreAgainst: parsedScore.them,
+    players:     players,
+    ownGoals:    0,
+    newPlayers:  newNames,
+    cardDetail:  bookingDetailText,
+    notes:       notesText,
+    scorersText: goalscorersText
+  });
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// The one path both ways in lead to
+// ════════════════════════════════════════════════════════════════════
+
+function processReport(report) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);           // two captains filing at once must not interleave
+
+  try {
+    const ss = getSpreadsheet();
+
+    // Already had this one? Say yes and change nothing.
+    if (report.reportId && alreadyRecorded(ss, report.reportId)) {
+      return { ok: true, duplicate: true, message: 'Already recorded.' };
+    }
+
+    syncRoster(ss, report.team, report.newPlayers);
+
+    // Keep the fallback Google Form's grid current, but never let a form
+    // problem stop a website report being saved.
+    try {
+      const form = getFormOrNull();
+      if (form) updateGridForTeam(form, report.team);
+    } catch (err) {
+      Logger.log('Grid refresh skipped: ' + err.message);
+    }
+
+    const played   = report.players.filter(function (p) { return p.played; });
+    const starting = played.filter(function (p) { return p.role === 'Start'; });
+    const bench    = played.filter(function (p) { return p.role === 'Sub'; });
+    const paid     = report.players.filter(function (p) { return p.subsPaid; });
+    const cash     = report.players.filter(function (p) { return p.payment === 'Paid'; });
+    const transfer = report.players.filter(function (p) { return p.payment === 'Transfer'; });
+    const unpaid   = played.filter(function (p) { return !p.subsPaid; });
+    const booked   = report.players.filter(function (p) { return p.booked; });
+    const sentOff  = report.players.filter(function (p) { return p.sentOff; });
+
+    const scoreText = (report.scoreFor === null || report.scoreAgainst === null)
+      ? ''
+      : report.scoreFor + '-' + report.scoreAgainst;
+
+    // Goals: the website tells us exactly, the form makes us guess.
+    let scorers;
+    if (report.source === 'Website') {
+      scorers = played
+        .filter(function (p) { return (p.goals || 0) > 0; })
+        .map(function (p) { return { name: p.name, goals: p.goals }; });
+    } else {
+      scorers = matchScorersFromText(ss, report.team, report.scorersText);
+    }
+
+    appendByHeader(ss, SHEET_REPORTS, REPORT_HEADERS, {
+      'Timestamp':               new Date(),
+      'Report ID':               report.reportId,
+      'Source':                  report.source,
+      'Captain':                 report.captain,
+      'Team':                    report.team,
+      'Opponent':                report.opponent,
+      'Home/Away':               report.homeAway,
+      'Match Date':              report.matchDate,
+      'Competition':             report.competition,
+      'Score':                   scoreText,
+      'Starting':                names(starting).join(', '),
+      'Bench':                   names(bench).join(', '),
+      'Subs Paid':               names(cash).join(', '),
+      'Paid by Transfer':        names(transfer).join(', '),
+      'Unpaid':                  names(unpaid).join(', '),
+      'Booked':                  names(booked).join(', '),
+      'Sent Off':                names(sentOff).join(', '),
+      'Goalscorers':             goalscorerCell(scorers, report.ownGoals),
+      'Own Goals':               report.ownGoals || '',
+      'Goalscorers (as typed)':  report.scorersText,
+      'Booking Detail':          cardDetailCell(report),
+      'Notes':                   report.notes
+    });
+
+    updatePlayerStats(ss, report.team, played, cash, transfer, booked, sentOff, scorers);
+
+    writeResult(ss, report, scorers);
+
+    return {
+      ok: true,
+      message: 'Report saved.',
+      played: played.length,
+      goals: scorers.reduce(function (n, s) { return n + s.goals; }, 0)
+    };
+
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Results — what the website reads back
+// ════════════════════════════════════════════════════════════════════
+
+function writeResult(ss, report, scorers) {
+  if (report.scoreFor === null || report.scoreAgainst === null) return;
+  if (!report.matchDate || !report.opponent) return;
+
+  const sheet = getOrCreate(ss, SHEET_RESULTS, RESULTS_HEADERS);
+
+  const outcome = report.scoreFor > report.scoreAgainst ? 'Win'
+                : report.scoreFor < report.scoreAgainst ? 'Loss'
+                : 'Draw';
+
+  const labels = scorerLabels(ss, report.team, scorers, report.ownGoals);
+
+  const row = [
+    report.matchDate,
+    report.team,
+    report.opponent,
+    report.scoreFor + '-' + report.scoreAgainst,
+    labels.join('; '),          // semicolons: the website splits on these
+    outcome,
+    new Date()
+  ];
+
+  // One row per fixture: replace if this match is already there.
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === report.matchDate &&
+        data[i][1] === report.team &&
+        data[i][2] === report.opponent) {
+      sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+      return;
+    }
+  }
+  sheet.appendRow(row);
+}
+
+// The website has always shown surnames — "Hay (2)", "Bergqvist (4)".
+// Keep that, but add a first initial where the squad has two of a surname,
+// so Craig and Kevin McDougall stay tellable apart.
+function scorerLabels(ss, team, scorers, ownGoals) {
+  const clashes = surnameClashes(ss, team);
+
+  const labels = scorers.map(function (s) {
+    const parts = String(s.name).split(',');
+    const surname = parts[0].trim();
+    let label = surname;
+    if (parts.length === 2 && clashes[surname.toLowerCase()]) {
+      const forename = parts[1].trim();
+      if (forename) label = surname + ' ' + forename.charAt(0).toUpperCase();
+    }
+    return label + (s.goals > 1 ? ' (' + s.goals + ')' : '');
+  });
+
+  if (ownGoals > 0) {
+    labels.push('OG' + (ownGoals > 1 ? ' (' + ownGoals + ')' : ''));
+  }
+  return labels;
+}
+
+function surnameClashes(ss, team) {
+  const sheet = ss.getSheetByName(SHEET_ROSTER);
+  const counts = {};
+  if (!sheet) return {};
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] !== team) continue;
+    const surname = String(data[i][0]).split(',')[0].trim().toLowerCase();
+    counts[surname] = (counts[surname] || 0) + 1;
+  }
+  const clashes = {};
+  Object.keys(counts).forEach(function (k) { if (counts[k] > 1) clashes[k] = true; });
+  return clashes;
+}
+
+// One line per card: "Smith, John — sent off — violent conduct, 55 mins"
+function cardDetailCell(report) {
+  const lines = report.players
+    .filter(function (p) { return p.booked || p.sentOff; })
+    .map(function (p) {
+      const what = p.sentOff ? 'sent off' : 'booked';
+      const why = p.cardNote ? ' \u2014 ' + p.cardNote : '';
+      return p.name + ' \u2014 ' + what + why;
+    });
+  // A Google Form submission has no per-player notes, so keep its free text.
+  if (!lines.length) return report.cardDetail || '';
+  return lines.join('\n') + (report.cardDetail ? '\n' + report.cardDetail : '');
+}
+
+function goalscorerCell(scorers, ownGoals) {
+  const parts = scorers.map(function (s) {
+    return s.name + (s.goals > 1 ? ' (' + s.goals + ')' : '');
+  });
+  if (ownGoals > 0) parts.push('OG' + (ownGoals > 1 ? ' (' + ownGoals + ')' : ''));
+  return parts.join(', ');
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Roster
+// ════════════════════════════════════════════════════════════════════
+
+function syncRoster(ss, team, newNames) {
+  if (!newNames || !newNames.length) return;
+
+  const sheet = getOrCreate(ss, SHEET_ROSTER, ['Name', 'Team']);
+  const data = sheet.getDataRange().getValues();
+  const existing = {};
+  for (let i = 1; i < data.length; i++) {
+    existing[(data[i][0] + '|' + data[i][1]).toLowerCase().trim()] = true;
+  }
+
+  newNames.forEach(function (name) {
+    const key = (name + '|' + team).toLowerCase().trim();
+    if (!existing[key]) {
+      sheet.appendRow([name, team]);
+      existing[key] = true;
+    }
+  });
+}
+
+function updateGridForTeam(form, team) {
+  if (!form) return;
+  const ss = getSpreadsheet();
+  const rosterSheet = ss.getSheetByName(SHEET_ROSTER);
+  if (!rosterSheet) return;
+
+  const data = rosterSheet.getDataRange().getValues();
+  const list = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] === team) list.push(data[i][0]);
+  }
+  list.sort();
+  if (!list.length) return;
+
+  form.getItems(FormApp.ItemType.GRID).forEach(function (item) {
+    if (item.getTitle().indexOf(team) !== -1) {
+      item.asGridItem().setRows(list);
+    }
+  });
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Player stats
+// ════════════════════════════════════════════════════════════════════
+
+function updatePlayerStats(ss, team, played, cash, transfer, booked, sentOff, scorers) {
+  const sheet = getOrCreate(ss, SHEET_STATS, STATS_HEADERS);
+  ensureHeaders(sheet, STATS_HEADERS);
+
+  const head = headerRow(sheet);
+  const colOf = function (name) { return head.indexOf(name) + 1; };
+
+  played.forEach(function (p) {
+    const row = findOrAddStatsRow(sheet, p.name, team, head.length);
+    bump(sheet, row, colOf('Appearances'), 1);
+    if (p.role === 'Start') bump(sheet, row, colOf('Starts'), 1);
+    if (p.role === 'Sub')   bump(sheet, row, colOf('Sub Apps'), 1);
+  });
+
+  cash.forEach(function (p) {
+    bump(sheet, findOrAddStatsRow(sheet, p.name, team, head.length), colOf('Subs Paid'), 1);
+  });
+  transfer.forEach(function (p) {
+    bump(sheet, findOrAddStatsRow(sheet, p.name, team, head.length), colOf('Paid by Transfer'), 1);
+  });
+  booked.forEach(function (p) {
+    bump(sheet, findOrAddStatsRow(sheet, p.name, team, head.length), colOf('Booked'), 1);
+  });
+  sentOff.forEach(function (p) {
+    bump(sheet, findOrAddStatsRow(sheet, p.name, team, head.length), colOf('Sent Off'), 1);
+  });
+  scorers.forEach(function (s) {
+    bump(sheet, findOrAddStatsRow(sheet, s.name, team, head.length), colOf('Goals'), s.goals);
+  });
+}
+
+function findOrAddStatsRow(sheet, name, team, width) {
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === name && data[i][1] === team) return i + 1;
+  }
+  const blank = [name, team];
+  for (let j = 2; j < width; j++) blank.push(0);
+  sheet.appendRow(blank);
+  return sheet.getLastRow();
+}
+
+function bump(sheet, row, column, by) {
+  if (!column || !by) return;
+  const cell = sheet.getRange(row, column);
+  cell.setValue((Number(cell.getValue()) || 0) + by);
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Goal parsing — only ever used for Google Form submissions now
+// ════════════════════════════════════════════════════════════════════
+
+function matchScorersFromText(ss, team, scorersText) {
+  const out = [];
+  if (!scorersText || !scorersText.trim()) return out;
+
+  const rosterSheet = ss.getSheetByName(SHEET_ROSTER);
+  if (!rosterSheet) return out;
+
+  const data = rosterSheet.getDataRange().getValues();
+  const roster = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] === team) roster.push(data[i][0]);
+  }
+
+  scorersText.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+    .forEach(function (entry) {
+      const m = entry.match(/^(.*?)\s*\((\d+)\)$/);
+      const raw = m ? m[1].trim() : entry;
+      const count = m ? parseInt(m[2], 10) : 1;
+      if (raw.toUpperCase() === 'OG') return;
+
+      const found = roster.find(function (full) {
+        const surname = full.split(',')[0].trim().toLowerCase();
+        return surname === raw.toLowerCase() ||
+               full.toLowerCase().indexOf(raw.toLowerCase()) !== -1;
+      });
+
+      if (found) {
+        out.push({ name: found, goals: count });
+      } else {
+        const sheet = getOrCreate(ss, SHEET_UNMATCHED, ['Timestamp', 'Team', 'As Typed', 'Goals']);
+        sheet.appendRow([new Date(), team, raw, count]);
+      }
+    });
+
+  return out;
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Small helpers
+// ════════════════════════════════════════════════════════════════════
+
+function getSpreadsheet() {
+  if (SPREADSHEET_ID) return SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  // Bound to the sheet?
+  const active = SpreadsheetApp.getActiveSpreadsheet();
+  if (active) return active;
+
+  // Bound to the form? Then use whatever the form feeds.
+  const form = getFormOrNull();
+  if (form && form.getDestinationId()) {
+    return SpreadsheetApp.openById(form.getDestinationId());
+  }
+
+  throw new Error('No spreadsheet found. Set SPREADSHEET_ID at the top of this script.');
+}
+
+// FormApp.getActiveForm() throws or returns null unless the script is bound
+// to a form. The website path must not care either way.
+function getFormOrNull() {
+  try {
+    return FormApp.getActiveForm();
+  } catch (err) {
+    return null;
+  }
+}
+
+function getOrCreate(ss, name, headers) {
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold')
+         .setBackground('#0f172a').setFontColor('#ffffff');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function headerRow(sheet) {
+  const width = Math.max(1, sheet.getLastColumn());
+  return sheet.getRange(1, 1, 1, width).getValues()[0].map(String);
+}
+
+// Adds any columns this version needs without disturbing existing data.
+function ensureHeaders(sheet, wanted) {
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(wanted);
+    sheet.setFrozenRows(1);
+    return;
+  }
+  const head = headerRow(sheet);
+  const missing = wanted.filter(function (h) { return head.indexOf(h) === -1; });
+  if (missing.length) {
+    sheet.getRange(1, head.length + 1, 1, missing.length).setValues([missing])
+         .setFontWeight('bold').setBackground('#0f172a').setFontColor('#ffffff');
+  }
+}
+
+function appendByHeader(ss, sheetName, headers, values) {
+  const sheet = getOrCreate(ss, sheetName, headers);
+  ensureHeaders(sheet, headers);
+  const head = headerRow(sheet);
+  const row = head.map(function (h) {
+    return Object.prototype.hasOwnProperty.call(values, h) ? values[h] : '';
+  });
+  sheet.appendRow(row);
+}
+
+function alreadyRecorded(ss, reportId) {
+  const sheet = ss.getSheetByName(SHEET_REPORTS);
+  if (!sheet || sheet.getLastRow() < 2) return false;
+  const head = headerRow(sheet);
+  const col = head.indexOf('Report ID');
+  if (col === -1) return false;
+  const values = sheet.getRange(2, col + 1, sheet.getLastRow() - 1, 1).getValues();
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][0]) === String(reportId)) return true;
+  }
+  return false;
+}
+
+function names(list) {
+  return list.map(function (p) { return p.name; });
+}
+
+function normalisePlayers(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map(function (p) {
+    return {
+      name:     String(p.name || '').trim(),
+      played:   p.played !== false,
+      role:     p.role === 'Sub' ? 'Sub' : 'Start',
+      subsPaid: !!p.subsPaid,
+      payment:  p.payment === 'Transfer' ? 'Transfer' : (p.subsPaid ? 'Paid' : ''),
+      booked:   !!p.booked,
+      sentOff:  !!p.sentOff,
+      cardNote: String(p.cardNote || '').trim(),
+      goals:    Math.max(0, parseInt(p.goals, 10) || 0)
+    };
+  }).filter(function (p) { return p.name.length > 0; });
+}
+
+function normaliseDate(value) {
+  if (!value) return '';
+  if (value instanceof Date) return Utilities.formatDate(value, 'Europe/London', 'yyyy-MM-dd');
+  const s = String(value).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);   // 15/08/2026, UK order
+  if (m) return m[3] + '-' + pad2(m[2]) + '-' + pad2(m[1]);
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? '' : Utilities.formatDate(d, 'Europe/London', 'yyyy-MM-dd');
+}
+
+function pad2(n) { return String(n).length < 2 ? '0' + n : String(n); }
+
+function toIntOrNull(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = parseInt(v, 10);
+  return isNaN(n) ? null : n;
+}
+
+// "3-2", "3 - 2", "3:2" → { us: 3, them: 2 }
+function parseScoreText(text) {
+  const m = String(text || '').match(/(\d+)\s*[-–:vV]\s*(\d+)/);
+  if (!m) return { us: null, them: null };
+  return { us: parseInt(m[1], 10), them: parseInt(m[2], 10) };
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// Run these by hand
+// ════════════════════════════════════════════════════════════════════
+
+// Edit the word below, run once, then delete the word again and save.
+function setSharedSecret() {
+  PropertiesService.getScriptProperties()
+    .setProperty('SHARED_SECRET', 'CHANGE_ME_TO_SOMETHING_ONLY_THE_CLUB_KNOWS');
+  Logger.log('Shared secret stored.');
+}
+
+function testUpdateAllGrids() {
+  const form = getFormOrNull();
+  if (!form) {
+    Logger.log('This script is not attached to a form, so there are no grids to refresh.');
+    return;
+  }
+  TEAMS.forEach(function (team) { updateGridForTeam(form, team); });
+}
+
+// Files a fake website report so you can watch every tab fill in.
+// Delete the rows afterwards.
+function testWebsiteReport() {
+  const out = processReport({
+    reportId:    'test-' + Utilities.getUuid(),
+    source:      'Website',
+    captain:     'Kinsella, Gerard',
+    team:        'Over 35s',
+    opponent:    'Test Opponent FC',
+    homeAway:    'Home',
+    matchDate:   '2026-08-15',
+    competition: 'League',
+    scoreFor:     3,
+    scoreAgainst: 2,
+    players: [
+      { name: 'Bishop, Alex',  played: true, role: 'Start', subsPaid: true,  booked: false, sentOff: false, goals: 2 },
+      { name: 'Brookes, Gary', played: true, role: 'Start', subsPaid: true,  booked: true,  sentOff: false, goals: 1 },
+      { name: 'Brennand, Carl',played: true, role: 'Sub',   subsPaid: false, booked: false, sentOff: false, goals: 0 }
+    ],
+    ownGoals:   1,
+    newPlayers: [],
+    cardDetail: 'Brookes — yellow, 70 mins',
+    notes:      'Test report, safe to delete.',
+    scorersText: ''
+  });
+  Logger.log(JSON.stringify(out));
+}
