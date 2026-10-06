@@ -10,6 +10,7 @@
 
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import MatchDetail from '../../components/MatchDetail.astro';
+import PlayerStatTable from '../../components/PlayerStatTable.astro';
 import { TEAMS } from '../../lib/teams.js';
 import players from '../../data/players.json';
 import {
@@ -308,72 +309,20 @@ const FORM_WORDS = { W: 'Win', D: 'Draw', L: 'Loss' };
       <h2>Season statistics</h2>
       <p class="muted small">
         Counted from match reports filed through this website, so these are
-        current-season figures only — not club career totals.
+        current-season figures only — not club career totals. Tap a player to
+        see the matches behind the number, then tap a match for the full
+        teamsheet.
       </p>
 
       <div class="rank-grid">
         {topScorers.length > 0 && (
-          <div>
-            <h3>Goalscorers</h3>
-            <table class="team-table">
-              <thead>
-                <tr><th class="narrow">#</th><th>Player</th><th class="narrow">Goals</th></tr>
-              </thead>
-              <tbody>
-                {topScorers.map((p) => (
-                  <tr>
-                    <td class="narrow">{p.joint ? `=${p.rank}` : p.rank}</td>
-                    <td>{readable(p.name)}</td>
-                    <td class="narrow">{p.goals}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <PlayerStatTable kind="goals" title="Goalscorers" rows={topScorers} />
         )}
-
         {topAppearances.length > 0 && (
-          <div>
-            <h3>Appearances</h3>
-            <table class="team-table">
-              <thead>
-                <tr>
-                  <th class="narrow">#</th><th>Player</th>
-                  <th class="narrow">Apps</th><th class="narrow">Starts</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topAppearances.map((p) => (
-                  <tr>
-                    <td class="narrow">{p.joint ? `=${p.rank}` : p.rank}</td>
-                    <td>{readable(p.name)}</td>
-                    <td class="narrow">{p.appearances}</td>
-                    <td class="narrow">{p.starts}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <PlayerStatTable kind="apps" title="Appearances" rows={topAppearances} />
         )}
-
         {topMotm.length > 0 && (
-          <div>
-            <h3>Man of the Match</h3>
-            <table class="team-table">
-              <thead>
-                <tr><th class="narrow">#</th><th>Player</th><th class="narrow">Awards</th></tr>
-              </thead>
-              <tbody>
-                {topMotm.map((p) => (
-                  <tr>
-                    <td class="narrow">{p.joint ? `=${p.rank}` : p.rank}</td>
-                    <td>{readable(p.name)}</td>
-                    <td class="narrow">{p.motm}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <PlayerStatTable kind="motm" title="Man of the Match" rows={topMotm} />
         )}
       </div>
     </section>
@@ -647,8 +596,4 @@ const FORM_WORDS = { W: 'Win', D: 'Draw', L: 'Loss' };
     margin-top: 1rem;
   }
 
-  .rank-grid h3 {
-    font-size: 1.05rem;
-    margin-bottom: 0;
-  }
 </style>

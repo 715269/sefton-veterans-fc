@@ -367,10 +367,35 @@ async function tallyPlayers() {
       players.set(k, {
         name, team,
         appearances: 0, starts: 0, subApps: 0,
-        goals: 0, booked: 0, sentOff: 0, motm: 0
+        goals: 0, booked: 0, sentOff: 0, motm: 0,
+        matches: []
       });
     }
     return players.get(k);
+  };
+
+  // The match-by-match record behind each total, so a team page can show
+  // WHICH games make up "5 goals" rather than just the number. One entry per
+  // player per match, created the first time that match mentions him.
+  //
+  // Matches are walked one at a time, so if this player already has an entry
+  // for the current match it is always his last one — no searching needed.
+  const log = (p, match) => {
+    const last = p.matches[p.matches.length - 1];
+    if (last && last.date === match.date && last.opponent === match.opponent) return last;
+    const entry = {
+      date: match.date,
+      team: match.team,
+      opponent: match.opponent,
+      homeAway: match.homeAway || '',
+      type: match.type || '',
+      result: match.result || '',
+      outcome: match.outcome || '',
+      started: false, sub: false,
+      goals: 0, motm: false
+    };
+    p.matches.push(entry);
+    return entry;
   };
 
   for (const match of season) {
@@ -381,12 +406,14 @@ async function tallyPlayers() {
       const p = find(match.team, name);
       p.appearances += 1;
       p.starts += 1;
+      log(p, match).started = true;
     }
 
     for (const name of d.bench || []) {
       const p = find(match.team, name);
       p.appearances += 1;
       p.subApps += 1;
+      log(p, match).sub = true;
     }
 
     // parseScorerCell gives [{ name, goals }] with own goals already dropped,
@@ -396,7 +423,10 @@ async function tallyPlayers() {
     // somewhere rather than a silent miscount.
     for (const s of d.scorers || []) {
       if (!s || !s.name) continue;
-      find(match.team, s.name).goals += Number(s.goals) || 1;
+      const p = find(match.team, s.name);
+      const n = Number(s.goals) || 1;
+      p.goals += n;
+      log(p, match).goals += n;
     }
 
     for (const name of d.booked || []) find(match.team, name).booked += 1;
@@ -408,8 +438,17 @@ async function tallyPlayers() {
     if (d.motm) {
       const onTeamsheet = (d.starting || []).includes(d.motm) ||
                            (d.bench || []).includes(d.motm);
-      if (onTeamsheet) find(match.team, d.motm).motm += 1;
+      if (onTeamsheet) {
+        const p = find(match.team, d.motm);
+        p.motm += 1;
+        log(p, match).motm = true;
+      }
     }
+  }
+
+  // Newest first, the same way round as the Results table on the team page.
+  for (const p of players.values()) {
+    p.matches.sort((a, b) => b.date.localeCompare(a.date));
   }
 
   return [...players.values()];
