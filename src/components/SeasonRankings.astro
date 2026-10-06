@@ -75,7 +75,7 @@ function position(p) {
           hidden={team !== defaultTeam}
         >
           {s.appearances.length === 0 ? (
-            <p class="empty">No matches played yet this season.</p>
+            <p class="empty">No league or cup matches played yet this season.</p>
           ) : (
             <div class="tables">
               <div class="table-block">
@@ -144,8 +144,8 @@ function position(p) {
     })}
 
     <p class="footnote">
-      Counted from teamsheets filed this season. Matches without a report
-      submitted are not included.
+      Counted from teamsheets filed this season. Friendlies, and matches
+      without a report submitted, are not included.
     </p>
   </section>
 )}

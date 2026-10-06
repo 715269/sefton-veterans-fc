@@ -24,7 +24,9 @@ const MANAGERS = await getManagers();
 // How many times each player has appeared for each team, keyed the same way
 // as POSITIONS — "team|name" in lower case. Used only to default subs to £0
 // on a genuine first appearance; the captain can always type over it.
-const statsByTeam = await getStatsByTeam();
+// Friendlies included on purpose: a friendly still counts as a player's first
+// game for subs, even though it is left out of the public stats tables.
+const statsByTeam = await getStatsByTeam({ includeFriendlies: true });
 const APPEARANCES = {};
 for (const team of Object.keys(statsByTeam)) {
   for (const p of statsByTeam[team].appearances) {

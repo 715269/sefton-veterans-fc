@@ -355,8 +355,20 @@ function withRanks(list, valueOf) {
   return ranked.map((p) => ({ ...p, joint: counts.get(p.rank) > 1 }));
 }
 
-async function tallyPlayers() {
-  const season = await getSeason();
+// Friendlies are left out of the player rankings by default — goals and
+// appearances in a friendly shouldn't decide the Golden Boot. They are still
+// played matches, so they stay in the Results table, the match drawer and the
+// team's season summary; only the player tallies skip them.
+//
+// Matched on the word rather than an exact value, so "Friendly",
+// "Pre-season friendly" and "Charity Friendly" are all caught.
+export function isFriendly(match) {
+  return /friendly/i.test(String(match?.type || ''));
+}
+
+async function tallyPlayers({ includeFriendlies = false } = {}) {
+  const season = (await getSeason())
+    .filter((m) => includeFriendlies || !isFriendly(m));
   const players = new Map();
 
   // Names are stored "Surname, Forename" and matched case-insensitively, but
@@ -499,8 +511,8 @@ function rankSquad(squad) {
  * for each, so a pooled list would show him twice — which is why the site
  * uses getStatsByTeam() instead.
  */
-export async function getStats(team) {
-  const all = await tallyPlayers();
+export async function getStats(team, options = {}) {
+  const all = await tallyPlayers(options);
   return rankSquad(all.filter((p) => !team || p.team === team));
 }
 
@@ -511,9 +523,14 @@ export async function getStats(team) {
  *
  * Teams with no reports yet still get an entry, with empty lists, so a page
  * can show "no matches played yet" rather than silently omitting the side.
+ *
+ * Friendlies are excluded unless you pass { includeFriendlies: true }. The
+ * match report form does, because it uses appearances to spot a player's
+ * first game for the first-game-free subs rule — and a friendly is a real
+ * game for that purpose.
  */
-export async function getStatsByTeam() {
-  const [season, all] = await Promise.all([getSeason(), tallyPlayers()]);
+export async function getStatsByTeam(options = {}) {
+  const [season, all] = await Promise.all([getSeason(), tallyPlayers(options)]);
   const teams = [...new Set(season.map((f) => f.team).filter(Boolean))];
 
   const out = {};
