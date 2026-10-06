@@ -282,9 +282,15 @@ export async function getUpcoming(team, limit, options = {}) {
   return limit ? list.slice(0, limit) : list;
 }
 
-/** Season summary per team: played, won, drawn, lost, goals, cards, form. */
+/**
+ * Season summary per team: played, won, drawn, lost, goals, cards, form.
+ *
+ * Friendlies are left out, so Played, the goal tally and the form guide
+ * reflect league and cup football only. They are still in getResults(), so
+ * the Results table and the match drawer show them as normal.
+ */
 export async function getSummary(team) {
-  const played = await getResults(team);
+  const played = (await getResults(team)).filter((m) => !isFriendly(m));
 
   const blank = {
     played: 0, won: 0, drawn: 0, lost: 0,

@@ -148,7 +148,7 @@ const FORM_WORDS = { W: 'Win', D: 'Draw', L: 'Loss' };
     <h2>This season</h2>
 
     {summary.played === 0 ? (
-      <p class="muted">No match reports filed for the {name} yet this season.</p>
+      <p class="muted">No league or cup results for the {name} yet this season.</p>
     ) : (
       <>
         <div class="stat-strip">
@@ -173,7 +173,7 @@ const FORM_WORDS = { W: 'Win', D: 'Draw', L: 'Loss' };
                 title={FORM_WORDS[letter] ?? letter}
               >{letter}</span>
             ))}
-            <span class="muted small">oldest first</span>
+            <span class="muted small">oldest first · friendlies not included</span>
           </p>
         )}
       </>
