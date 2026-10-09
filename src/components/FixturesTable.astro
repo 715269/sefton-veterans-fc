@@ -21,7 +21,18 @@ interface Fixture {
   outcome: string;
   type: string;
   provisional?: boolean;
+  pitch?: string;   // Chesterfield allocation: Sefton / Forefield / Free
 }
+
+// Who has the shared Chesterfield pitch that week. Blank for teams the
+// allocation doesn't apply to, so the cell shows a dash rather than nothing.
+const pitchClass = (p?: string) => {
+  const v = String(p || '').trim().toLowerCase();
+  if (v.startsWith('sefton')) return 'pitch-ours';
+  if (v.startsWith('forefield')) return 'pitch-theirs';
+  if (v === 'free') return 'pitch-free';
+  return '';
+};
 
 interface Props {
   fixtures: Fixture[];
@@ -73,6 +84,7 @@ const rows = fixtures.map((f, i) => ({ ...f, _id: i }));
         <th data-sort="opponent">Opponent</th>
         <th data-sort="venue">Venue</th>
         <th data-sort="type">Type</th>
+        <th data-sort="pitch" title="Who has the Chesterfield pitch that week">Pitch</th>
         <th data-sort="result">Result</th>
         <th>Scorers</th>
         <th data-sort="outcome">Outcome</th>
@@ -87,6 +99,7 @@ const rows = fixtures.map((f, i) => ({ ...f, _id: i }));
           data-venue={f.venue}
           data-date={f.date}
           data-outcome={f.outcome}
+          data-pitch={f.pitch || ''}
           data-real={f.opponent && f.opponent.trim().toUpperCase() !== 'TBC' && !f.provisional ? 'yes' : 'no'}
           class={`outcome-${f.outcome.toLowerCase()}`}
         >
@@ -95,6 +108,9 @@ const rows = fixtures.map((f, i) => ({ ...f, _id: i }));
           <td>{f.opponent}</td>
           <td>{f.venue}</td>
           <td>{f.type}</td>
+          <td>{f.pitch
+            ? <span class={`pitch-badge ${pitchClass(f.pitch)}`}>{f.pitch}</span>
+            : '—'}</td>
           <td>{f.result ?? 'TBC'}</td>
           <td>{f.scorers.length > 0 ? f.scorers.join(', ') : '—'}</td>
           <td><span class="outcome-badge">{f.outcome}</span></td>
@@ -211,7 +227,7 @@ const rows = fixtures.map((f, i) => ({ ...f, _id: i }));
   // CSV export: builds a CSV from whatever rows are currently visible
   // (so if you've searched/filtered, the export matches what you see).
   csvButton.addEventListener('click', () => {
-    const headers = ['Date', 'Team', 'Opponent', 'Venue', 'Type', 'Result', 'Scorers', 'Outcome'];
+    const headers = ['Date', 'Team', 'Opponent', 'Venue', 'Type', 'Pitch', 'Result', 'Scorers', 'Outcome'];
     const visibleRows = allRows.filter((row) => !row.hidden);
 
     const csvLines = [headers.join(',')];
@@ -348,6 +364,31 @@ const rows = fixtures.map((f, i) => ({ ...f, _id: i }));
   .outcome-unknown .outcome-badge {
     background: #f1f5f9;
     color: #94a3b8;
+  }
+
+  /* Chesterfield pitch allocation */
+  .pitch-badge {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .pitch-ours {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .pitch-theirs {
+    background: #f1f5f9;
+    color: #475569;
+  }
+
+  .pitch-free {
+    background: #fef9c3;
+    color: #854d0e;
   }
 
   #fixtures-empty-message {
