@@ -19,29 +19,29 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     />
     <div class="wrap">
     <h1>Last Person<br>Standing</h1>
-    
+
       <div class="clock" id="clock">
         <div class="clock-label" id="clockLabel">Loading</div>
         <div class="clock-time" id="clockTime">--:--:--</div>
         <div class="clock-sub" id="clockSub"></div>
       </div>
-    
+
       <div class="survivors">
         <div class="survivors-count" id="survivorCount">&nbsp;</div>
         <div class="pips" id="pips"></div>
       </div>
-    
+
       <nav role="tablist">
         <button role="tab" aria-selected="true" data-tab="pick" id="tabPick">Sign in</button>
         <button role="tab" aria-selected="false" data-tab="board">The board</button>
         <button role="tab" aria-selected="false" data-tab="rules">Rules</button>
       </nav>
-    
+
       <div id="msg"></div>
-    
+
       <!-- ============ PICK ============ -->
       <section id="tab-pick">
-    
+
         <div class="card" id="signinCard">
           <h2>Sign in</h2>
           <label for="inName">Email address</label>
@@ -55,14 +55,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           <p class="muted" style="margin:18px 0 6px">Not entered yet?</p>
           <button class="btn ghost" id="btnShowJoin">Register</button>
         </div>
-    
+
         <div class="card hidden" id="chooseCard">
           <h2>Which entry?</h2>
           <p class="muted" style="margin:0 0 12px">That email address has more than one entry on it.</p>
           <div id="chooseList"></div>
           <button class="btn ghost" id="btnCancelChoose" style="margin-top:10px">Back</button>
         </div>
-    
+
         <div class="card hidden" id="joinCard">
           <h2>Register</h2>
           <label for="jnName">Your name</label>
@@ -77,28 +77,28 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           <button class="btn ghost" id="btnCancelJoin" style="margin-top:10px">Back</button>
           <p class="muted" style="margin:14px 0 0">Entering more than one? Use the same email and give each entry a different name.</p>
         </div>
-    
+
         <div id="pickArea" class="hidden">
-    
+
           <div class="card" id="statusCard"></div>
-    
+
           <div id="fixtures"></div>
-    
+
           <div class="card" id="burntCard">
             <h2>Teams you've used</h2>
             <div id="burntList"></div>
           </div>
-    
+
           <div id="switchArea" class="hidden card">
             <h2>Your other entries</h2>
             <div id="switchList"></div>
           </div>
-    
+
           <button class="btn ghost" id="btnSwitch">Sign out</button>
-    
+
         </div>
       </section>
-    
+
       <!-- ============ BOARD ============ -->
       <section id="tab-board" class="hidden">
         <div class="card">
@@ -106,7 +106,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           <div id="board"><p class="muted">Loading…</p></div>
         </div>
       </section>
-    
+
       <!-- ============ RULES ============ -->
       <section id="tab-rules" class="hidden">
         <div class="card rules">
@@ -115,22 +115,22 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <li>Every gameweek, pick <b>one Premier League team to win</b>.</li>
             <li>They win, you go through. <b>A draw puts you out</b>, same as a defeat.</li>
             <li>Once you've used a team, <b>you can't use them again</b> until everyone's burnt through all twenty.</li>
-            <li>Picks lock <b>an hour before the first kick-off</b> of the gameweek. Miss the deadline and you're <b>given the next available team alphabetically</b> — you stay in, but you don't get to choose.</li>
+            <li>Picks lock at the <b>first kick-off</b> of the gameweek. Miss the deadline and you're <b>given the next available team alphabetically</b> — you stay in, but you don't get to choose.</li>
             <li>If any match in the round is <b>postponed</b>, the whole round is void. Nobody goes out and everyone's team is handed back.</li>
-            <li>If everyone left goes out in the <b>same</b> gameweek, it's a <b>rollover</b>. The pot carries over and a <b>new round</b> starts: <b>all twenty teams come back</b> for everyone. You stake again to carry on, and anyone knocked out earlier — or anyone new — can <b>buy in</b>. Nobody is in until they've paid.</li>
+            <li>If everyone left goes out in the <b>same</b> gameweek, it's a <b>rollover</b> — nobody goes out, teams are handed back, and you all carry on. Everyone still in stakes again, and it's the one chance for anyone knocked out to <b>buy back in</b>.</li>
             <li>Everyone's picks stay hidden until the deadline passes. Then the board shows the lot.</li>
             <li><b>One life.</b> The last one standing takes <b>80% of the pot</b>. The other 20% goes to club funds.</li>
           </ul>
         </div>
       </section>
-    
+
       <footer>
         <button id="btnAdmin">Sefton Veterans FC</button>
       </footer>
-    
+
       <!-- ============ ADMIN ============ -->
       <section id="tab-admin" class="hidden">
-    
+
         <div class="card">
           <h2>Admin</h2>
           <label for="adToken">Admin token</label>
@@ -138,19 +138,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           <button class="btn" id="btnAdLoad">Unlock</button>
           <pre id="adOut" class="muted" style="white-space:pre-wrap;margin-top:14px"></pre>
         </div>
-    
+
         <div id="adPanel" class="hidden">
-    
+
           <div class="card">
             <h2>Entries</h2>
             <p id="adEntries" class="muted" style="margin:0 0 12px"></p>
-            <div class="row" style="margin-bottom:12px">
+            <div class="row">
               <button class="btn ghost" data-entries="open">Open entries</button>
               <button class="btn ghost" data-entries="running">Close entries</button>
             </div>
-            <button class="btn danger" id="btnNewRound">Start new round (after a rollover)</button>
           </div>
-    
+
           <div class="card">
             <h2>The week</h2>
             <div class="row" style="margin-bottom:10px">
@@ -158,13 +157,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
               <button class="btn ghost" data-admin="resolve">Resolve round</button>
             </div>
             <button class="btn ghost" data-admin="why" style="margin-bottom:10px">Why hasn't it resolved?</button>
-            <button class="btn ghost" data-admin="resultsemail" style="margin-bottom:10px">Send results email</button>
-            <button class="btn danger" id="btnForce">Force resolve now</button>
+            <button class="btn ghost" data-admin="resultsemail">Send results email</button>
             <label for="adGW">Current gameweek</label>
             <input id="adGW" inputmode="numeric" placeholder="Leave blank for the live one">
             <button class="btn ghost" data-admin="setgw">Set gameweek</button>
           </div>
-    
+
           <div class="card">
             <h2>WhatsApp</h2>
             <p class="muted" style="margin:0 0 10px">Pick a message, copy it, paste it into the group.</p>
@@ -182,7 +180,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
                  style="text-align:center;text-decoration:none;line-height:1.4">Open WhatsApp</a>
             </div>
           </div>
-    
+
           <div class="card">
             <h2>Add a player</h2>
             <label for="adNewName">Name</label>
@@ -191,14 +189,43 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <input id="adNewEmail" type="email" placeholder="Leave blank if they haven't got one">
             <button class="btn ghost" id="btnAdAdd">Enter them</button>
           </div>
-    
+
           <div class="card">
             <h2>Players</h2>
-            <p id="adCounts" class="muted" style="margin:0 0 6px"></p>
+            <p id="adCounts" class="muted" style="margin:0 0 10px"></p>
+
+            <input id="adSearch" type="search" placeholder="Search name or email" autocomplete="off">
+            <div class="row">
+              <select id="adSort" aria-label="Sort players">
+                <option value="entry">Order entered</option>
+                <option value="first">First name A–Z</option>
+                <option value="last">Surname A–Z</option>
+                <option value="unpaid">Unpaid first</option>
+                <option value="nopick">Yet to pick first</option>
+                <option value="status">Still in first</option>
+              </select>
+              <select id="adFilter" aria-label="Show">
+                <option value="all">Everyone</option>
+                <option value="alive">Still in</option>
+                <option value="out">Out</option>
+                <option value="unpaid">Unpaid</option>
+                <option value="nopick">Yet to pick</option>
+              </select>
+            </div>
+            <p id="adShowing" class="muted" style="margin:0 0 6px"></p>
+
             <pre id="adRowOut" class="muted" style="white-space:pre-wrap;margin:0 0 10px"></pre>
+
+            <label class="arow-sel selall"><input type="checkbox" id="adSelAll"> Select all shown</label>
             <div id="adPlayers"></div>
+            <div id="adBulk" class="adbulk hidden">
+              <span id="adBulkCount"></span>
+              <button class="mini on" id="btnBulkPaid">Mark paid</button>
+              <button class="mini" id="btnBulkUnpaid">Mark unpaid</button>
+              <button class="mini" id="btnBulkClear">Clear</button>
+            </div>
           </div>
-    
+
         </div>
       </section>
     </div>
@@ -286,20 +313,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     letter-spacing:.12em;
     font-size:13px;
     color:var(--mute);
-  }.lps .survivors-count b{color:var(--chalk);font-weight:600}.lps .pips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.lps .pip{width:9px;height:9px;border-radius:50%;background:var(--live)}.lps .pip.gone{background:var(--out);opacity:.55}.lps .pips.buying .pip.gone{background:var(--line);opacity:1}.lps .buyin{
-    margin-top:12px;
-    padding:14px;
-    border:1px solid var(--flood);
-    border-radius:3px;
-    background:rgba(245,196,81,.08);
-  }.lps .buyin-amount{
-    font-family:var(--data);
-    font-size:30px;
-    font-weight:600;
-    color:var(--flood);
-    line-height:1;
-    margin-bottom:4px;
-  }.lps /* ---------- tabs ---------- */
+  }.lps .survivors-count b{color:var(--chalk);font-weight:600}.lps .pips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.lps .pip{width:9px;height:9px;border-radius:50%;background:var(--live)}.lps .pip.gone{background:var(--out);opacity:.55}.lps /* ---------- tabs ---------- */
 
   nav{
     display:flex;
@@ -512,6 +526,29 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   }
 
 
+  /* ---------- admin: sort, filter, multi-select ---------- */
+
+  .lps select{
+    width:100%;background:var(--ink);border:1px solid var(--line);border-radius:3px;
+    color:var(--chalk);font-family:var(--body);font-size:16px;padding:12px;margin-bottom:12px;
+  }
+  .lps select:focus{outline:2px solid var(--flood);outline-offset:-1px}
+  .lps input[type=checkbox]{
+    width:20px;height:20px;padding:0;margin:0;flex:0 0 20px;accent-color:var(--live);cursor:pointer;
+  }
+  .lps .arow-sel{
+    display:flex;align-items:center;gap:10px;margin:0;cursor:pointer;
+    font-family:var(--body);text-transform:none;letter-spacing:0;font-size:inherit;color:inherit;
+  }
+  .lps .selall{padding:8px 0;border-bottom:1px solid var(--line);color:var(--mute);font-size:14px}
+  .lps .adbulk{
+    position:sticky;bottom:0;z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    background:var(--panel-2);border:1px solid var(--live);border-radius:3px;padding:10px 12px;margin-top:10px;
+  }
+  .lps .adbulk.hidden{display:none}
+  .lps .adbulk span{flex:1;font-family:var(--display);text-transform:uppercase;letter-spacing:.08em;font-size:13px}
+
+
   /* ---------- overriding the site's base styles ---------- */
 
   .lps h1{color:var(--chalk);font-family:var(--display)}
@@ -618,13 +655,10 @@ function renderClock(){
 function renderSurvivors(){
   if(!STATE) return;
   const alive = STATE.aliveCount, total = STATE.totalCount;
-  const buying = STATE.buyIn && STATE.buyIn.open;
-  $('survivorCount').innerHTML = '<b>' + alive + '</b> of ' + total +
-    (buying ? ' bought in' : ' still standing');
+  $('survivorCount').innerHTML = '<b>' + alive + '</b> of ' + total + ' still standing';
   let pips = '';
   for(let i=0;i<total;i++) pips += '<div class="pip'+(i<alive?'':' gone')+'"></div>';
   $('pips').innerHTML = pips;
-  $('pips').className = 'pips' + (buying ? ' buying' : '');
 }
 
 // ---------------- fixtures ----------------
@@ -682,24 +716,6 @@ function renderStatus(){
   const me = STATE.me;
   const card = $('statusCard');
   if(!me) return;
-
-  const buy = STATE.buyIn || {};
-
-  if(me.status !== 'alive' && buy.open){
-    card.innerHTML = '<h2>'+me.name+'</h2>'
-      + '<p><span class="status out">Not in yet</span></p>'
-      + '<p style="margin:10px 0 0">A new round has started — <b>all twenty teams are back</b>, '
-      + 'whatever you\'d used up.</p>'
-      + '<div class="buyin">'
-      +   '<div class="buyin-amount">£'+buy.returning+'</div>'
-      +   '<div class="muted">to play this round. Pay <b>'+buy.payTo+'</b>.</div>'
-      + '</div>'
-      + '<p class="muted" style="margin:12px 0 0">You\'ll show as in once your payment\'s '
-      + 'been marked off. Nobody is in until they\'ve paid.</p>'
-      + (buy.prizeText ? '<p class="muted" style="margin:8px 0 0">'+buy.potText+' pot — '
-          +buy.prizeText+' to the winner.</p>' : '');
-    return;
-  }
 
   if(me.status !== 'alive'){
     card.innerHTML = '<h2>'+me.name+'</h2><p><span class="status out">Knocked out</span> '
@@ -959,35 +975,8 @@ async function loadAdmin(){
       + ' still in · ' + paid.length + ' paid'
       + (nopick.length ? ' · ' + nopick.length + ' yet to pick GW' + d.gameweek : ' · all picked');
 
-    $('adPlayers').innerHTML = d.players.map(p=>{
-      const key = p.name;
-      const pickTxt = p.picked
-        ? (p.pick ? 'GW' + d.gameweek + ': ' + p.pick : 'Picked')
-        : (p.status === 'alive' ? 'No pick yet' : '');
-      return '<div class="arow">'
-        + '<div class="arow-top">'
-        +   '<span class="arow-name '+(p.status==='out'?'out':'')+'">'+p.name+'</span>'
-        +   '<span class="tag '+(p.paid?'yes':'no')+'">'+(p.paid?'Paid':'Unpaid')+'</span>'
-        + '</div>'
-        + '<div class="arow-meta">'+(p.email || 'no email')
-        +   (pickTxt ? ' · ' + pickTxt : '')
-        +   (p.status==='out' ? ' · out GW'+(p.gwOut||'?') : '')
-        + '</div>'
-        + '<div class="arow-btns">'
-        +   '<button class="mini '+(p.paid?'on':'')+'" data-p="'+key+'" data-do="paid" data-v="'+(p.paid?'N':'Y')+'">'
-        +     (p.paid?'Mark unpaid':'Mark paid')+'</button>'
-        +   '<button class="mini" data-p="'+key+'" data-do="resendpin">Send PIN</button>'
-        +   (p.status==='alive'
-              ? '<button class="mini" data-p="'+key+'" data-do="knockout">Knock out</button>'
-              : '<button class="mini" data-p="'+key+'" data-do="revive">Put back in</button>')
-        +   '<button class="mini danger" data-p="'+key+'" data-do="delete">Delete</button>'
-        + '</div>'
-        + '</div>';
-    }).join('');
-
-    $('adPlayers').querySelectorAll('button[data-do]').forEach(b=>{
-      b.addEventListener('click', ()=> adminRowAction(b.dataset.do, b.dataset.p, b.dataset.v));
-    });
+    AD = d;
+    renderAdminPlayers();
 
     $('adPanel').classList.remove('hidden');
   }catch(err){
@@ -997,6 +986,128 @@ async function loadAdmin(){
   }
 }
 
+// ---- player list: sort, filter, search, multi-select ----
+
+let AD = null;          // last players payload, so sorting/searching doesn't refetch
+const SEL = new Set();  // ticked entry names — survives search/sort/refresh
+let SHOWN = [];         // names currently on screen
+
+const byName = (a,b) => a.name.localeCompare(b.name, 'en', {sensitivity:'base'});
+const surname = n => { const w = String(n).trim().split(/\s+/); return (w[w.length-1]||'').toLowerCase(); };
+const noPick = p => p.status === 'alive' && !p.picked;
+
+function renderAdminPlayers(){
+  if(!AD) return;
+  const d = AD;
+  const sort = $('adSort').value, filter = $('adFilter').value;
+  const q = $('adSearch').value.trim().toLowerCase();
+
+  let list = d.players.filter(p=>{
+    if(filter === 'alive'  && p.status !== 'alive') return false;
+    if(filter === 'out'    && p.status === 'alive') return false;
+    if(filter === 'unpaid' && p.paid) return false;
+    if(filter === 'nopick' && !noPick(p)) return false;
+    if(q && (p.name + ' ' + (p.email||'')).toLowerCase().indexOf(q) === -1) return false;
+    return true;
+  });
+
+  const flagFirst = f => (a,b) => (f(b) - f(a)) || byName(a,b);
+  const sorters = {
+    first:  byName,
+    last:   (a,b) => surname(a.name).localeCompare(surname(b.name)) || byName(a,b),
+    unpaid: flagFirst(p => p.paid ? 0 : 1),
+    nopick: flagFirst(p => noPick(p) ? 1 : 0),
+    status: flagFirst(p => p.status === 'alive' ? 1 : 0)
+  };
+  if(sorters[sort]) list = list.slice().sort(sorters[sort]);
+
+  // Drop ticks for anyone who's been deleted
+  const exists = new Set(d.players.map(p=>p.name));
+  SEL.forEach(n => { if(!exists.has(n)) SEL.delete(n); });
+  SHOWN = list.map(p=>p.name);
+
+  $('adShowing').textContent = list.length === d.players.length
+    ? '' : 'Showing ' + list.length + ' of ' + d.players.length;
+
+  $('adPlayers').innerHTML = !list.length ? '<p class="muted">Nobody matches.</p>' : list.map(p=>{
+    const key = p.name;
+    const pickTxt = p.picked
+      ? (p.pick ? 'GW' + d.gameweek + ': ' + p.pick : 'Picked')
+      : (p.status === 'alive' ? 'No pick yet' : '');
+    return '<div class="arow">'
+      + '<div class="arow-top">'
+      +   '<label class="arow-sel"><input type="checkbox" data-sel="'+key+'"'+(SEL.has(key)?' checked':'')+'>'
+      +   '<span class="arow-name '+(p.status==='out'?'out':'')+'">'+p.name+'</span></label>'
+      +   '<span class="tag '+(p.paid?'yes':'no')+'">'+(p.paid?'Paid':'Unpaid')+'</span>'
+      + '</div>'
+      + '<div class="arow-meta">'+(p.email || 'no email')
+      +   (pickTxt ? ' · ' + pickTxt : '')
+      +   (p.status==='out' ? ' · out GW'+(p.gwOut||'?') : '')
+      + '</div>'
+      + '<div class="arow-btns">'
+      +   '<button class="mini '+(p.paid?'on':'')+'" data-p="'+key+'" data-do="paid" data-v="'+(p.paid?'N':'Y')+'">'
+      +     (p.paid?'Mark unpaid':'Mark paid')+'</button>'
+      +   '<button class="mini" data-p="'+key+'" data-do="resendpin">Send PIN</button>'
+      +   (p.paid ? '' : '<button class="mini" data-p="'+key+'" data-do="remindpay">Send reminder</button>')
+      +   (p.status==='alive'
+            ? '<button class="mini" data-p="'+key+'" data-do="knockout">Knock out</button>'
+            : '<button class="mini" data-p="'+key+'" data-do="revive">Put back in</button>')
+      +   '<button class="mini danger" data-p="'+key+'" data-do="delete">Delete</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+
+  $('adPlayers').querySelectorAll('button[data-do]').forEach(b=>{
+    b.addEventListener('click', ()=> adminRowAction(b.dataset.do, b.dataset.p, b.dataset.v));
+  });
+
+  $('adPlayers').querySelectorAll('input[data-sel]').forEach(c=>{
+    c.addEventListener('change', ()=>{
+      c.checked ? SEL.add(c.dataset.sel) : SEL.delete(c.dataset.sel);
+      updateBulkBar();
+    });
+  });
+
+  updateBulkBar();
+}
+
+function updateBulkBar(){
+  const n = SEL.size;
+  $('adBulk').classList.toggle('hidden', !n);
+  $('adBulkCount').textContent = n + ' selected';
+  $('adSelAll').checked = SHOWN.length > 0 && SHOWN.every(x=>SEL.has(x));
+}
+
+async function bulkPaid(v){
+  const names = Array.from(SEL);
+  if(!names.length) return;
+  if(!confirm('Mark ' + names.length + ' player' + (names.length===1?'':'s')
+      + ' as ' + (v==='Y'?'paid':'unpaid') + '?')) return;
+  rowOut('Working…');
+  try{
+    const res = await adminApi('setpaidmany', {players:names, paid:v});
+    SEL.clear();
+    await loadAdmin();
+    rowOut(res);
+  }catch(err){ rowOut('Failed: ' + err.message); }
+}
+
+// Sort choice is remembered on this device; filter and search reset each visit
+(function(){ const v = store.get('svfc_lps_adSort'); if(v) $('adSort').value = v; })();
+$('adSort').addEventListener('change', ()=>{ store.set('svfc_lps_adSort', $('adSort').value); renderAdminPlayers(); });
+$('adFilter').addEventListener('change', renderAdminPlayers);
+$('adSearch').addEventListener('input', renderAdminPlayers);
+
+$('adSelAll').addEventListener('change', ()=>{
+  const on = $('adSelAll').checked;
+  SHOWN.forEach(n => on ? SEL.add(n) : SEL.delete(n));
+  renderAdminPlayers();
+});
+
+$('btnBulkPaid').addEventListener('click', ()=> bulkPaid('Y'));
+$('btnBulkUnpaid').addEventListener('click', ()=> bulkPaid('N'));
+$('btnBulkClear').addEventListener('click', ()=>{ SEL.clear(); renderAdminPlayers(); });
+
 function rowOut(text){
   const el = $('adRowOut');
   el.textContent = text || '';
@@ -1005,6 +1116,7 @@ function rowOut(text){
 
 async function adminRowAction(what, who, value){
   if(what === 'knockout' && !confirm('Knock ' + who + ' out?')) return;
+  if(what === 'remindpay' && !confirm('Send ' + who + ' a payment reminder, asking them to pay Alan Roberts directly?')) return;
   if(what === 'delete' && !confirm(
       'Delete ' + who + ' completely?\n\n'
     + 'This removes the entry and every pick they have made. It cannot be undone '
@@ -1013,7 +1125,7 @@ async function adminRowAction(what, who, value){
 
   rowOut('Working…');
   try{
-    const map = {paid:'setpaid', resendpin:'resendpin', knockout:'knockout', revive:'revive', delete:'delete'};
+    const map = {paid:'setpaid', resendpin:'resendpin', remindpay:'remindpay', knockout:'knockout', revive:'revive', delete:'delete'};
     const res = await adminApi(map[what], {player:who, paid:value});
     const msg = typeof res === 'string' ? res : JSON.stringify(res, null, 2);
     await loadAdmin();      // repaints the list, so write the message after
@@ -1071,36 +1183,6 @@ $('btnWaCopy').addEventListener('click', async ()=>{
     $('btnWaCopy').textContent = 'Press Ctrl+C';
     setTimeout(()=> $('btnWaCopy').textContent = 'Copy', 2500);
   }
-});
-
-$('btnNewRound').addEventListener('click', async ()=>{
-  if(!confirm('Start a new round?\n\n'
-    + '• Every team is handed back — all 20 available to everyone\n'
-    + '• Everyone is marked unpaid and out\n'
-    + '• The current pot is carried over\n'
-    + '• Entries reopen\n\n'
-    + 'Players come back in as you mark them paid. Only do this after a rollover.')) return;
-  if(!confirm('Last check — this resets all 83 entries. Carry on?'.replace('83', STATE ? STATE.totalCount : ''))) return;
-
-  adOut('Working…');
-  try{
-    adOut(await adminApi('newround'));
-    await loadAdmin();
-    await refresh();
-  }catch(err){ adOut('Failed: ' + err.message); }
-});
-
-$('btnForce').addEventListener('click', async ()=>{
-  if(!confirm('Resolve gameweek ' + (STATE ? STATE.gameweek : '') + ' now, before the rest of the '
-    + 'round has been played?\n\nOnly works if every team anyone picked has already played. '
-    + 'A postponement later in the round will no longer void it.')) return;
-  adOut('Working…');
-  try{
-    const res = await adminApi('resolve', {gw: STATE ? STATE.gameweek : '', force: true});
-    adOut(typeof res === 'string' ? res : JSON.stringify(res, null, 2));
-    await loadAdmin();
-    await refresh();
-  }catch(err){ adOut('Failed: ' + err.message); }
 });
 
 $('btnAdAdd').addEventListener('click', async ()=>{
