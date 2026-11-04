@@ -1,0 +1,384 @@
+---
+// src/pages/match-money.astro
+//
+// The match money, kept apart from the match report so that filing a report
+// never depends on the money being to hand. One screen: the match, the cash
+// taken, what came out of it, and what is left for the club.
+//
+// Posts to the same Apps Script endpoint as the match report, distinguished by
+// type: 'money'. Sending it again for the same match replaces the earlier
+// figures on the Match Costs tab.
+
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getFixtures } from '../lib/season.js';
+
+const FIXTURES = await getFixtures();
+const ENDPOINT = import.meta.env.PUBLIC_REPORT_ENDPOINT || '';
+const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
+---
+
+<BaseLayout title="Match Money" description="Enter the cash and costs for a Sefton Veterans FC match.">
+<div class="mm" id="mm">
+  <header class="mm-head">
+    <p class="mm-eyebrow">For whoever held the cash</p>
+    <h1>Match money</h1>
+  </header>
+
+  <form id="mm-form" novalidate>
+    <div class="mm-field">
+      <label class="mm-label" for="mm-team">Team</label>
+      <select id="mm-team">
+        <option value="">Choose a team</option>
+        <option>Over 35s</option>
+        <option>Over 45s</option>
+        <option>Over 50s</option>
+        <option>Open Age</option>
+      </select>
+    </div>
+
+    <div class="mm-field" id="mm-match-field" hidden>
+      <label class="mm-label" for="mm-match">Match</label>
+      <select id="mm-match"></select>
+    </div>
+
+    <div id="mm-manual" hidden>
+      <div class="mm-field">
+        <label class="mm-label" for="mm-opponent">Opponent</label>
+        <input type="text" id="mm-opponent" autocapitalize="words" />
+      </div>
+      <div class="mm-field">
+        <label class="mm-label" for="mm-date">Match date</label>
+        <input type="date" id="mm-date" />
+      </div>
+    </div>
+
+    <div class="mm-field">
+      <label class="mm-label" for="mm-name">Your name</label>
+      <input type="text" id="mm-name" autocomplete="name" />
+    </div>
+
+    <div class="mm-field">
+      <label class="mm-label" for="mm-cash">Cash collected</label>
+      <input type="number" id="mm-cash" class="mm-money" inputmode="decimal" min="0" step="0.01" placeholder="0.00" />
+      <span class="mm-hint">Cash only. Leave out anyone who paid the club by bank transfer.</span>
+    </div>
+
+    <div class="mm-field">
+      <span class="mm-label">Paid out of that cash</span>
+      <div class="mm-grid">
+        <div>
+          <label for="mm-ref">Ref fee</label>
+          <input type="number" id="mm-ref" class="mm-money" inputmode="decimal" min="0" step="0.01" placeholder="0.00" />
+        </div>
+        <div>
+          <label for="mm-kit">Kit cleaning</label>
+          <input type="number" id="mm-kit" class="mm-money" inputmode="decimal" min="0" step="0.01" placeholder="0.00" />
+        </div>
+        <div>
+          <label for="mm-pitch">Pitch share</label>
+          <input type="number" id="mm-pitch" class="mm-money" inputmode="decimal" min="0" step="0.01" placeholder="0.00" />
+        </div>
+        <div>
+          <label for="mm-other">Other</label>
+          <input type="number" id="mm-other" class="mm-money" inputmode="decimal" min="0" step="0.01" placeholder="0.00" />
+        </div>
+      </div>
+      <div class="mm-field mm-note" id="mm-note-wrap" hidden>
+        <label class="mm-label" for="mm-note">What was the "Other" cost?</label>
+        <input type="text" id="mm-note" placeholder="e.g. new nets" />
+      </div>
+    </div>
+
+    <div class="mm-balance" aria-live="polite">
+      <span id="mm-balance-label">To hand over to the club</span>
+      <strong id="mm-balance">£0.00</strong>
+    </div>
+
+    <p class="mm-alert" id="mm-alert" role="alert" hidden></p>
+    <button type="submit" class="mm-send" id="mm-send">Send</button>
+  </form>
+
+  <div class="mm-done" id="mm-done" hidden>
+    <h2>Money recorded</h2>
+    <p id="mm-done-body"></p>
+    <a href="/match-money">Enter another match</a>
+  </div>
+</div>
+</BaseLayout>
+
+<script is:inline define:vars={{ FIXTURES, ENDPOINT, SHARED_SECRET }}>
+  var $ = function (id) { return document.getElementById(id); };
+  var NOT_LISTED = '__other__';
+  var MONTHS = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  var today = new Date().toISOString().slice(0, 10);
+
+  function pad(n) { return String(n).length < 2 ? '0' + n : String(n); }
+
+  function toISODate(raw) {
+    var s = String(raw || '').trim();
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return m[1] + '-' + m[2] + '-' + m[3];
+    m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+    if (m) return m[3] + '-' + pad(m[2]) + '-' + pad(m[1]);
+    m = s.match(/(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{4})/);
+    if (m && MONTHS.indexOf(m[2].toLowerCase()) > -1) {
+      return m[3] + '-' + pad(MONTHS.indexOf(m[2].toLowerCase()) + 1) + '-' + pad(m[1]);
+    }
+    return '';
+  }
+
+  // Games already played, newest first: that's nearly always the one wanted.
+  function matchesFor(team) {
+    return (Array.isArray(FIXTURES) ? FIXTURES : [])
+      .filter(function (f) { return f && f.team === team; })
+      .map(function (f) {
+        return { opponent: String(f.opponent || '').trim(), date: toISODate(f.date) };
+      })
+      .filter(function (f) {
+        return f.opponent && f.opponent.toUpperCase() !== 'TBC' && f.opponent !== '—' &&
+               f.date && f.date <= today;
+      })
+      .sort(function (a, b) { return b.date.localeCompare(a.date); });
+  }
+
+  function pretty(iso) {
+    var p = iso.split('-');
+    return p[2] + '/' + p[1] + '/' + p[0];
+  }
+
+  function fillMatches() {
+    var team = $('mm-team').value;
+    var sel = $('mm-match');
+    sel.innerHTML = '';
+    $('mm-match-field').hidden = !team;
+    if (!team) { $('mm-manual').hidden = true; return; }
+    matchesFor(team).forEach(function (f) {
+      var o = document.createElement('option');
+      o.value = f.date + '|' + f.opponent;
+      o.textContent = pretty(f.date) + ' — ' + f.opponent;
+      sel.appendChild(o);
+    });
+    var other = document.createElement('option');
+    other.value = NOT_LISTED;
+    other.textContent = 'Not listed';
+    sel.appendChild(other);
+    showManual();
+  }
+
+  function showManual() {
+    $('mm-manual').hidden = $('mm-match').value !== NOT_LISTED;
+  }
+
+  function amount(id) { return Math.max(0, parseFloat($(id).value) || 0); }
+
+  function money(n) { return '£' + Math.abs(n).toFixed(2); }
+
+  function balance() {
+    return amount('mm-cash') - amount('mm-ref') - amount('mm-kit') - amount('mm-pitch') - amount('mm-other');
+  }
+
+  function renderBalance() {
+    var b = balance();
+    $('mm-balance-label').textContent = b < 0 ? 'The club owes you' : 'To hand over to the club';
+    $('mm-balance').textContent = money(b);
+    $('mm-note-wrap').hidden = amount('mm-other') === 0;
+  }
+
+  function showAlert(text) {
+    $('mm-alert').textContent = text;
+    $('mm-alert').hidden = !text;
+  }
+
+  function chosenMatch() {
+    var v = $('mm-match').value;
+    if (v === NOT_LISTED) {
+      return { opponent: $('mm-opponent').value.trim(), date: $('mm-date').value };
+    }
+    var cut = v.indexOf('|');
+    return { date: v.slice(0, cut), opponent: v.slice(cut + 1) };
+  }
+
+  function problem(match) {
+    if (!$('mm-team').value) return 'Choose a team.';
+    if (!match.opponent) return 'Add who you played.';
+    if (!match.date) return 'Add the match date.';
+    if (!$('mm-name').value.trim()) return 'Add your name.';
+    return '';
+  }
+
+  // A saved name saves typing next week. Everything still works without it.
+  function rememberName(name) {
+    try { localStorage.setItem('svfc-money-name', name); } catch (err) {}
+  }
+
+  function send(e) {
+    e.preventDefault();
+    var match = chosenMatch();
+    var wrong = problem(match);
+    showAlert(wrong);
+    if (wrong) return;
+
+    var btn = $('mm-send');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        type: 'money',
+        secret: SHARED_SECRET,
+        team: $('mm-team').value,
+        opponent: match.opponent,
+        matchDate: match.date,
+        submitter: $('mm-name').value.trim(),
+        cashCollected: amount('mm-cash'),
+        refFee: amount('mm-ref'),
+        kitCleaning: amount('mm-kit'),
+        pitchShare: amount('mm-pitch'),
+        other: amount('mm-other'),
+        otherNote: $('mm-note').value.trim()
+      })
+    }).then(function (res) { return res.json(); }).then(function (reply) {
+      if (!reply || !reply.ok) {
+        showAlert('Not saved: ' + ((reply && reply.error) || 'the club spreadsheet did not accept it.') +
+                  ' Please try again, and tell Ged if it keeps happening.');
+        return;
+      }
+      rememberName($('mm-name').value.trim());
+      var b = balance();
+      $('mm-done-body').textContent = match.opponent + ', ' + pretty(match.date) + ': ' +
+        (b < 0 ? 'the club owes you ' : 'you have ') + money(b) +
+        (b < 0 ? '.' : ' to hand over to the club.');
+      $('mm-form').hidden = true;
+      $('mm-done').hidden = false;
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }).catch(function () {
+      showAlert('Not saved: we could not confirm it reached the club spreadsheet. Your figures are still here, so please try again when you have signal.');
+    }).then(function () {
+      btn.disabled = false;
+      btn.textContent = 'Send';
+    });
+  }
+
+  function init() {
+    try { $('mm-name').value = localStorage.getItem('svfc-money-name') || ''; } catch (err) {}
+    $('mm-date').value = today;
+    $('mm-team').addEventListener('change', fillMatches);
+    $('mm-match').addEventListener('change', showManual);
+    Array.prototype.forEach.call(document.querySelectorAll('.mm-money'), function (el) {
+      el.addEventListener('input', renderBalance);
+    });
+    $('mm-form').addEventListener('submit', send);
+
+    // Arriving from a filed report: that match is already chosen.
+    var q = new URLSearchParams(window.location.search);
+    if (q.get('team')) {
+      $('mm-team').value = q.get('team');
+      fillMatches();
+      var wanted = q.get('date') + '|' + q.get('opponent');
+      var known = Array.prototype.some.call($('mm-match').options, function (o) { return o.value === wanted; });
+      if (known) {
+        $('mm-match').value = wanted;
+      } else if (q.get('opponent')) {
+        $('mm-match').value = NOT_LISTED;
+        $('mm-opponent').value = q.get('opponent');
+        $('mm-date').value = q.get('date') || today;
+      }
+      showManual();
+    }
+    renderBalance();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+</script>
+
+<style is:global>
+  .mm {
+    --navy: #0f172a;
+    --blue: #2323e0;
+    --ink: #1e293b;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --tap: 52px;
+    max-width: 620px;
+    margin: 0 auto;
+    padding: 1.5rem 16px 3rem;
+    color: var(--ink);
+  }
+
+  .mm *:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+
+  .mm [hidden] { display: none !important; }
+
+  .mm-eyebrow { margin: 0; color: var(--muted); font-size: 0.85rem; }
+
+  .mm-head h1 { margin: 0.1rem 0 1.25rem; color: var(--navy); }
+
+  .mm-field { margin-bottom: 1.25rem; }
+
+  .mm-label { display: block; margin-bottom: 0.35rem; color: var(--navy); font-weight: 600; }
+
+  .mm-hint { display: block; margin-top: 0.35rem; color: var(--muted); font-size: 0.85rem; }
+
+  .mm input, .mm select {
+    width: 100%;
+    min-height: var(--tap);
+    padding: 0.55rem 0.7rem;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    background: white;
+    color: var(--ink);
+    font: inherit;
+    font-size: 1rem;
+    box-sizing: border-box;
+  }
+
+  .mm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+  .mm-grid label { display: block; margin-bottom: 0.25rem; color: var(--muted); font-size: 0.85rem; }
+
+  .mm-note { margin: 0.75rem 0 0; }
+
+  .mm-balance {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 1.5rem 0 1rem;
+    padding: 1rem 1.1rem;
+    border-radius: 12px;
+    background: var(--navy);
+    color: #cbd5e1;
+  }
+
+  .mm-balance strong { color: white; font-size: 1.3rem; }
+
+  .mm-alert {
+    margin: 0 0 1rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 10px;
+    background: #fef2f2;
+    color: #991b1b;
+  }
+
+  .mm-send {
+    width: 100%;
+    min-height: var(--tap);
+    border: 0;
+    border-radius: 10px;
+    background: var(--blue);
+    color: white;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .mm-send:disabled { opacity: 0.6; }
+
+  .mm-done h2 { margin: 0 0 0.5rem; color: var(--navy); }
+</style>
