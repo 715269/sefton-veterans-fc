@@ -314,6 +314,12 @@ export async function getSummary(team) {
 
   // Most recent five, oldest of those first, so it reads left to right.
   summary.form = played.slice(0, 5).reverse().map((m) => m.outcome.charAt(0));
+
+  // The same, but counting friendlies. Used by the team tiles, so a side that
+  // mostly plays friendlies still shows how it's been getting on.
+  summary.recentForm = (await getResults(team))
+    .filter((m) => ['Win', 'Draw', 'Loss'].indexOf(m.outcome) !== -1)
+    .slice(0, 5).reverse().map((m) => m.outcome.charAt(0));
   summary.goalDifference = summary.goalsFor - summary.goalsAgainst;
   return summary;
 }

@@ -38,9 +38,11 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
       </select>
     </div>
 
-    <div class="mm-field" id="mm-match-field" hidden>
-      <label class="mm-label" for="mm-match">Match</label>
-      <select id="mm-match"></select>
+    <div class="mm-field" id="mm-match-field">
+      <label class="mm-label" for="mm-match">Which match is this money for?</label>
+      <select id="mm-match" disabled>
+        <option value="">Choose a team first</option>
+      </select>
     </div>
 
     <div id="mm-manual" hidden>
@@ -90,6 +92,13 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
         <input type="text" id="mm-note" placeholder="e.g. new nets" />
       </div>
     </div>
+
+    <div class="mm-field">
+      <label class="mm-label" for="mm-notes">Notes <span class="mm-optional">(optional)</span></label>
+      <textarea id="mm-notes" rows="3" placeholder="Anything the treasurer should know, e.g. two players still owe for this game"></textarea>
+    </div>
+
+    <p class="mm-for" id="mm-for" hidden></p>
 
     <div class="mm-balance" aria-live="polite">
       <span id="mm-balance-label">To hand over to the club</span>
@@ -148,12 +157,26 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     return p[2] + '/' + p[1] + '/' + p[0];
   }
 
+  function addOption(sel, value, text) {
+    var o = document.createElement('option');
+    o.value = value;
+    o.textContent = text;
+    sel.appendChild(o);
+  }
+
+  // Nothing is picked for them: the money has to be put against the match
+  // they mean, not whichever game happened to be most recent.
   function fillMatches() {
     var team = $('mm-team').value;
     var sel = $('mm-match');
     sel.innerHTML = '';
-    $('mm-match-field').hidden = !team;
-    if (!team) { $('mm-manual').hidden = true; return; }
+    sel.disabled = !team;
+    if (!team) {
+      addOption(sel, '', 'Choose a team first');
+      showManual();
+      return;
+    }
+    addOption(sel, '', 'Choose the match');
     matchesFor(team).forEach(function (f) {
       var o = document.createElement('option');
       o.value = f.date + '|' + f.opponent;
@@ -169,6 +192,17 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
 
   function showManual() {
     $('mm-manual').hidden = $('mm-match').value !== NOT_LISTED;
+    renderFor();
+  }
+
+  // Spells out which match the money is going against, right above Send.
+  function renderFor() {
+    var box = $('mm-for');
+    var team = $('mm-team').value;
+    var m = $('mm-match').value ? chosenMatch() : null;
+    if (!team || !m || !m.opponent || !m.date) { box.hidden = true; return; }
+    box.textContent = 'This is for: ' + team + ' v ' + m.opponent + ', ' + pretty(m.date);
+    box.hidden = false;
   }
 
   function amount(id) { return Math.max(0, parseFloat($(id).value) || 0); }
@@ -202,6 +236,7 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
 
   function problem(match) {
     if (!$('mm-team').value) return 'Choose a team.';
+    if (!$('mm-match').value) return 'Choose which match this money is for.';
     if (!match.opponent) return 'Add who you played.';
     if (!match.date) return 'Add the match date.';
     if (!$('mm-name').value.trim()) return 'Add your name.';
@@ -239,7 +274,8 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
         kitCleaning: amount('mm-kit'),
         pitchShare: amount('mm-pitch'),
         other: amount('mm-other'),
-        otherNote: $('mm-note').value.trim()
+        otherNote: $('mm-note').value.trim(),
+        notes: $('mm-notes').value.trim()
       })
     }).then(function (res) { return res.json(); }).then(function (reply) {
       if (!reply || !reply.ok) {
@@ -267,7 +303,9 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
     try { $('mm-name').value = localStorage.getItem('svfc-money-name') || ''; } catch (err) {}
     $('mm-date').value = today;
     $('mm-team').addEventListener('change', fillMatches);
-    $('mm-match').addEventListener('change', showManual);
+    $('mm-match').addEventListener('change', function () { showAlert(''); showManual(); });
+    $('mm-opponent').addEventListener('input', renderFor);
+    $('mm-date').addEventListener('input', renderFor);
     Array.prototype.forEach.call(document.querySelectorAll('.mm-money'), function (el) {
       el.addEventListener('input', renderBalance);
     });
@@ -327,7 +365,20 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
 
   .mm-hint { display: block; margin-top: 0.35rem; color: var(--muted); font-size: 0.85rem; }
 
-  .mm input, .mm select {
+  .mm-optional { color: #64748b; font-weight: 400; }
+
+  .mm-for {
+    margin: 0 0 1rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 10px;
+    background: #eef2ff;
+    color: #0f172a;
+    font-weight: 600;
+  }
+
+  .mm textarea { resize: vertical; min-height: 0; }
+
+  .mm input, .mm select, .mm textarea {
     width: 100%;
     min-height: var(--tap);
     padding: 0.55rem 0.7rem;

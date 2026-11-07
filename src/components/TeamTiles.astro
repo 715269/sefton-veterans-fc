@@ -15,10 +15,11 @@ const tiles = await Promise.all(
   TEAMS.map(async (t) => {
     const summary = await getSummary(t.name);
 
-    // Oldest on the left, newest on the right — the same order as the form
-    // string on the team pages, so the two can never contradict each other.
-    // Padded to five so every tile has the same rhythm in August.
-    const form = summary.form.slice(-5);
+    // Oldest on the left, newest on the right. Friendlies count here, unlike
+    // the form line on the team pages, so a side that mostly plays friendlies
+    // doesn't sit with an empty tile. Padded to five so every tile has the
+    // same rhythm in August.
+    const form = summary.recentForm.slice(-5);
     const dots = [...form, ...Array(Math.max(0, 5 - form.length)).fill(null)];
 
     return { ...t, dots };
