@@ -1,0 +1,115 @@
+---
+// src/components/PinGate.astro
+//
+// A PIN screen in front of the committee-only pages (match report, match
+// money), so a passer-by can't file anything by accident.
+//
+// Use it like this, just above the page's own content:
+//   <PinGate />
+//   <div data-pin-protected> ...the form... </div>
+//
+// Once the right PIN is entered, this phone is remembered and won't be asked
+// again. This is a deterrent, not real security: the PIN can be found in the
+// page source by anyone who goes looking. Change it in one place, below.
+
+const PIN = '2011';  // the club's formation year
+---
+
+<script is:inline define:vars={{ PIN }}>
+  // Runs before the page is drawn, so a remembered phone never sees the PIN screen.
+  try {
+    if (localStorage.getItem('svfc-committee-pin') === PIN) {
+      document.documentElement.classList.add('pin-ok');
+    }
+  } catch (err) { /* private browsing: just ask for the PIN each time */ }
+
+  window.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('pin-form');
+    var input = document.getElementById('pin-input');
+    var error = document.getElementById('pin-error');
+    if (!form) return;
+    if (!document.documentElement.classList.contains('pin-ok')) input.focus();
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (input.value.trim() === PIN) {
+        try { localStorage.setItem('svfc-committee-pin', PIN); } catch (err) {}
+        document.documentElement.classList.add('pin-ok');
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      } else {
+        error.hidden = false;
+        input.value = '';
+        input.focus();
+      }
+    });
+  });
+</script>
+
+<div class="pin-gate">
+  <form id="pin-form" class="pin-box" novalidate>
+    <h1>Committee only</h1>
+    <p>Enter the club PIN to continue.</p>
+    <label for="pin-input" class="pin-label">PIN</label>
+    <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" maxlength="8" />
+    <p class="pin-error" id="pin-error" role="alert" hidden>That's not right. Try again.</p>
+    <button type="submit">Continue</button>
+  </form>
+</div>
+
+<style is:global>
+  html:not(.pin-ok) [data-pin-protected] { display: none !important; }
+  html.pin-ok .pin-gate { display: none; }
+
+  .pin-gate {
+    display: flex;
+    justify-content: center;
+    padding: 3rem 16px 4rem;
+  }
+
+  .pin-box {
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+  }
+
+  .pin-box h1 { margin: 0 0 0.4rem; color: var(--color-navy, #0f172a); }
+
+  .pin-box p { margin: 0 0 1.25rem; color: #64748b; }
+
+  .pin-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .pin-box input {
+    width: 100%;
+    min-height: 52px;
+    box-sizing: border-box;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    font: inherit;
+    font-size: 1.5rem;
+    letter-spacing: 0.4em;
+    text-align: center;
+  }
+
+  .pin-box .pin-error { margin: 0.75rem 0 0; color: #b91c1c; }
+
+  .pin-box button {
+    width: 100%;
+    min-height: 52px;
+    margin-top: 1rem;
+    border: 0;
+    border-radius: 10px;
+    background: var(--color-blue, #2323e0);
+    color: white;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .pin-box :focus-visible { outline: 3px solid var(--color-blue, #2323e0); outline-offset: 2px; }
+</style>

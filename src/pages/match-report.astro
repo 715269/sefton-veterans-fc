@@ -2,6 +2,7 @@
 // Captains' weekly match report — replaces the Google Form's job,
 // writes to the same spreadsheet via the Apps Script web app.
 import BaseLayout from '../layouts/BaseLayout.astro';
+import PinGate from '../components/PinGate.astro';
 import players from '../data/players.json';
 import { getSquads, getSeason, getPositions, getFixtures, getManagers } from '../lib/season.js';
 // The fixture list comes from the Fixtures tab in the spreadsheet, falling
@@ -42,7 +43,8 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
 ---
 
 <BaseLayout title="Match Report">
-<div class="mr" id="mr">
+<PinGate />
+<div class="mr" id="mr" data-pin-protected>
   <header class="mr-head">
     <p class="mr-eyebrow">Submitter's report</p>
     <h1>Match report</h1>

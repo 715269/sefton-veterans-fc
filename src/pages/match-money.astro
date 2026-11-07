@@ -10,6 +10,7 @@
 // figures on the Match Costs tab.
 
 import BaseLayout from '../layouts/BaseLayout.astro';
+import PinGate from '../components/PinGate.astro';
 import { getFixtures } from '../lib/season.js';
 
 const FIXTURES = await getFixtures();
@@ -18,7 +19,8 @@ const SHARED_SECRET = import.meta.env.PUBLIC_REPORT_SECRET || '';
 ---
 
 <BaseLayout title="Match Money" description="Enter the cash and costs for a Sefton Veterans FC match.">
-<div class="mm" id="mm">
+<PinGate />
+<div class="mm" id="mm" data-pin-protected>
   <header class="mm-head">
     <p class="mm-eyebrow">For whoever held the cash</p>
     <h1>Match money</h1>
