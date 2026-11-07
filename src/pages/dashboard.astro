@@ -236,6 +236,10 @@ const weekends = [...weekendGroups.entries()]
     <div class="container">
       <h1>Match Reports Dashboard</h1>
       <p>Every filed report, formatted and ready to copy straight into the forum.</p>
+      <div class="hero-actions">
+        <a href="/match-report" class="btn btn-primary">File a match report</a>
+        <a href="/match-money" class="btn btn-outline">Enter match money</a>
+      </div>
     </div>
   </section>
 
@@ -599,6 +603,13 @@ const weekends = [...weekendGroups.entries()]
   .hero-band p {
     color: #cbd5e1;
     margin: 0;
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
   }
 
   .filter-row {
